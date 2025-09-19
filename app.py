@@ -1,12 +1,17 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-import os
+from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-db = SQLAlchemy(app)
+app = FastAPI()
 
-@app.route('/api/order', methods=['POST'])
-def order():
-    data = request.json
-    return jsonify({'success': True})
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def base_path():
+    return {"success": True}
+

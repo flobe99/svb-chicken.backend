@@ -1,6 +1,5 @@
-flask
-flask_sqlalchemy
+fastapi
+uvicorn
+sqlalchemy
 psycopg2-binary
-flask-cors
-gunicorn
 python-dotenv
