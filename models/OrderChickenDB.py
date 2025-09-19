@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 
+Base = declarative_base()
 
 class OrderChickenDB(Base):
     __tablename__ = "orders"

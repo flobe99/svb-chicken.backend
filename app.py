@@ -49,3 +49,49 @@ def create_order(order: OrderChicken):
         db.close()
 
 
+@app.get("/orders")
+def get_orders():
+    db = SessionLocal()
+    try:
+        orders = db.query(OrderChickenDB).all()
+        return [order.__dict__ for order in orders]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/order/{id}")
+def update_order(id: str, updated_order: OrderChicken):
+    db = SessionLocal()
+    try:
+        order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        for key, value in updated_order.dict().items():
+            setattr(order, key, value)
+
+        db.commit()
+        return {"success": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/order/{id}")
+def delete_order(id: str):
+    db = SessionLocal()
+    try:
+        order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        db.delete(order)
+        db.commit()
+        return {"success": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
