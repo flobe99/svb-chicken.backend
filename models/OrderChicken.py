@@ -13,7 +13,7 @@ class OrderStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 class OrderChicken(BaseModel):
-    id: str
+    id: Optional[int] = None
     firstname: str
     lastname: str
     mail: str

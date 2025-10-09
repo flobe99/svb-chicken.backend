@@ -2,14 +2,13 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 import json
 
 from models.OrderChicken import OrderChicken
-from models.OrderChickenDB import OrderChickenDB
+from models.OrderChickenDB import Base, OrderChickenDB
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -17,11 +16,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 print("DATABASE_URL:", DATABASE_URL)
 
 
-engine = create_engine(DATABASE_URL)
-
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
-# Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -33,6 +29,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+Base.metadata.create_all(bind=engine)
 
 # WebSocket-Verbindungen
 active_connections: list[WebSocket] = []
@@ -62,7 +60,7 @@ async def base_path():
 @app.post("/order")
 def create_order(order: OrderChicken):
     db = SessionLocal()
-    db_order = OrderChickenDB(**order.dict())
+    db_order = OrderChickenDB(**{k: v for k, v in order.dict().items() if k != "id"})
     try:
         db.add(db_order)
         db.commit()
@@ -91,7 +89,7 @@ def get_orders(status: str = Query(None)):
         db.close()
 
 @app.put("/order/{id}")
-async def update_order(id: str, updated_order: OrderChicken):
+async def update_order(id: int, updated_order: OrderChicken):
     db = SessionLocal()
     try:
         order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
@@ -102,13 +100,18 @@ async def update_order(id: str, updated_order: OrderChicken):
             setattr(order, key, value)
 
         db.commit()
+        db.refresh(order)  # Holt aktuelle Daten aus DB
 
-        if updated_order.status in ["CHECKED_IN", "PAID", "READY_FOR_PICKUP"]:
-            await broadcast_order_event(f"ORDER_{updated_order.status}", order.__dict__)
+        # Bereinige das Objekt für JSON
+        clean_order = {k: v for k, v in order.__dict__.items() if not k.startswith("_")}
 
-        return {"success": True}
+        # if updated_order.status in ["CHECKED_IN", "PAID", "READY_FOR_PICKUP"]:
+        await broadcast_order_event(f"ORDER_{updated_order.status}", clean_order)
+
+        return {"success": True, "order": clean_order}
     except Exception as e:
         db.rollback()
+        print("Update error:", str(e))  # Für Debugging
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
