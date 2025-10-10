@@ -60,7 +60,7 @@ async def base_path():
     return {"success": True}
 
 @app.post("/order")
-def create_order(order: OrderChicken):
+async def create_order(order: OrderChicken):
     db = SessionLocal()
     try:
         products = db.query(ProductDB).all()
