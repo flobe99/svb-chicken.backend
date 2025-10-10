@@ -1,10 +1,9 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Numeric
-
-Base = declarative_base()
+from OrderChickenDB import Base
 
 class ProductDB(Base):
-    __tablename__ = "price"  # Tabellenname wie angegeben
+    __tablename__ = "price"
 
     id = Column(Integer, primary_key=True, index=True)
     product = Column(String)

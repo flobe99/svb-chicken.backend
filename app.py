@@ -9,6 +9,8 @@ import json
 
 from models.OrderChicken import OrderChicken
 from models.OrderChickenDB import Base, OrderChickenDB
+from models.Product import Product
+from models.ProductDB import Base, ProductDB
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -159,9 +161,9 @@ def get_product(id: int):
         db.close()
 
 @app.post("/product")
-def create_product(product: ProductCreate):
+def create_product(product: Product):
     db = SessionLocal()
-    db_product = ProductDB(**product.dict())
+    db_product = ProductDB(**{k: v for k, v in product.dict().items() if k != "id"})
     try:
         db.add(db_product)
         db.commit()
