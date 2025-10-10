@@ -7,7 +7,7 @@ Base = declarative_base()
 class OrderChickenDB(Base):
     __tablename__ = "orders"
 
-    id = Column(String, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     firstname = Column(String)
     lastname = Column(String)
     mail = Column(String)
@@ -18,4 +18,3 @@ class OrderChickenDB(Base):
     fries = Column(Integer)
     miscellaneous = Column(String)
     status = Column(String, default="CREATED")
-    created_at = Column(DateTime, default=datetime.utcnow)
