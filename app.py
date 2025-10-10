@@ -78,6 +78,8 @@ async def create_order(order: OrderChicken):
         db.commit()
         db.refresh(db_order)
 
+        clean_order = {k: v for k, v in db_order.__dict__.items() if not k.startswith("_")}
+
         await broadcast_order_event(f"ORDER_{order.status}", clean_order)
 
         return {"success": True, "order": db_order.__dict__}
