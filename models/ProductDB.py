@@ -1,6 +1,6 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Numeric
-from OrderChickenDB import Base
+from models.OrderChickenDB import Base
 
 class ProductDB(Base):
     __tablename__ = "price"
