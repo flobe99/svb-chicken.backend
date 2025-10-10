@@ -11,6 +11,7 @@ from models.OrderChicken import OrderChicken
 from models.OrderChickenDB import Base, OrderChickenDB
 from models.Product import Product
 from models.ProductDB import Base, ProductDB
+from decimal import Decimal
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -78,11 +79,22 @@ async def create_order(order: OrderChicken):
         db.commit()
         db.refresh(db_order)
 
-        clean_order = {k: v for k, v in db_order.__dict__.items() if not k.startswith("_")}
+        clean_order = {
+            k: float(v) if isinstance(v, Decimal) else v
+            for k, v in db_order.__dict__.items()
+            if not k.startswith("_")
+        }
 
         await broadcast_order_event(f"ORDER_{order.status}", clean_order)
 
-        return {"success": True, "order": db_order.__dict__}
+        return {
+            "success": True,
+            "order": {
+                k: float(v) if isinstance(v, Decimal) else v
+                for k, v in db_order.__dict__.items()
+                if not k.startswith("_")
+            }
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
