@@ -62,16 +62,31 @@ async def base_path():
 @app.post("/order")
 def create_order(order: OrderChicken):
     db = SessionLocal()
-    db_order = OrderChickenDB(**{k: v for k, v in order.dict().items() if k != "id"})
     try:
+        products = db.query(ProductDB).all()
+        price_map = {p.product.lower(): float(p.price) for p in products}
+
+        total_price = 0.0
+        total_price += order.chicken * price_map.get("chicken", 0)
+        total_price += order.nuggets * price_map.get("nuggets", 0)
+        total_price += order.fries * price_map.get("fries", 0)
+
+        db_order = OrderChickenDB(**{k: v for k, v in order.dict().items() if k != "id"})
+        db_order.price = total_price
+
         db.add(db_order)
         db.commit()
-        return {"success": True}
+        db.refresh(db_order)
+
+        await broadcast_order_event(f"ORDER_{order.status}", clean_order)
+
+        return {"success": True, "order": db_order.__dict__}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
 
 @app.get("/orders")
 def get_orders(status: str = Query(None)):
@@ -98,22 +113,30 @@ async def update_order(id: int, updated_order: OrderChicken):
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
+        products = db.query(ProductDB).all()
+        price_map = {p.product.lower(): float(p.price) for p in products}
+
+        total_price = 0.0
+        total_price += updated_order.chicken * price_map.get("chicken", 0)
+        total_price += updated_order.nuggets * price_map.get("nuggets", 0)
+        total_price += updated_order.fries * price_map.get("fries", 0)
+
         for key, value in updated_order.dict().items():
             setattr(order, key, value)
 
-        db.commit()
-        db.refresh(order)  # Holt aktuelle Daten aus DB
+        order.price = total_price
 
-        # Bereinige das Objekt für JSON
+        db.commit()
+        db.refresh(order)
+
         clean_order = {k: v for k, v in order.__dict__.items() if not k.startswith("_")}
 
-        # if updated_order.status in ["CHECKED_IN", "PAID", "READY_FOR_PICKUP"]:
         await broadcast_order_event(f"ORDER_{updated_order.status}", clean_order)
 
         return {"success": True, "order": clean_order}
     except Exception as e:
         db.rollback()
-        print("Update error:", str(e))  # Für Debugging
+        print("Update error:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()

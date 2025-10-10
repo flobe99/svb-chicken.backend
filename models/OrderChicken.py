@@ -24,3 +24,4 @@ class OrderChicken(BaseModel):
     fries: int
     miscellaneous: str
     status: OrderStatus = OrderStatus.CREATED
+    price: float
