@@ -159,6 +159,24 @@ def delete_order(id: str):
     finally:
         db.close()
 
+@app.post("/order/price")
+def calculate_order_price(order: OrderChicken):
+    db = SessionLocal()
+    try:
+        products = db.query(ProductDB).all()
+        price_map = {p.product.lower(): float(p.price) for p in products}
+
+        total_price = 0.0
+        total_price += order.chicken * price_map.get("chicken", 0)
+        total_price += order.nuggets * price_map.get("nuggets", 0)
+        total_price += order.fries * price_map.get("fries", 0)
+
+        return {"price": round(total_price, 2)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
 @app.get("/products")
 def get_products():
     db = SessionLocal()
