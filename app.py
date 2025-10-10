@@ -130,3 +130,78 @@ def delete_order(id: str):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+@app.get("/products")
+def get_products():
+    db = SessionLocal()
+    try:
+        products = db.query(ProductDB).all()
+        return [product.__dict__ for product in products]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/product/{id}")
+def get_product(id: int):
+    db = SessionLocal()
+    try:
+        product = db.query(ProductDB).filter(ProductDB.id == id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+        return product.__dict__
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.post("/product")
+def create_product(product: ProductCreate):
+    db = SessionLocal()
+    db_product = ProductDB(**product.dict())
+    try:
+        db.add(db_product)
+        db.commit()
+        db.refresh(db_product)
+        return db_product.__dict__
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/product/{id}")
+def update_product(id: int, updated_product: ProductCreate):
+    db = SessionLocal()
+    try:
+        product = db.query(ProductDB).filter(ProductDB.id == id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        product.product = updated_product.product
+        product.price = updated_product.price
+
+        db.commit()
+        return product.__dict__
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/product/{id}")
+def delete_product(id: int):
+    db = SessionLocal()
+    try:
+        product = db.query(ProductDB).filter(ProductDB.id == id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        db.delete(product)
+        db.commit()
+        return {"success": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
