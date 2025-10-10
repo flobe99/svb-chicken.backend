@@ -228,10 +228,22 @@ def update_product(id: int, updated_product: Product):
         product.price = updated_product.price
 
         db.commit()
-        return product.__dict__
+        db.refresh(product)
+
+        return {
+            "success": True,
+            "product": {
+                "id": product.id,
+                "product": product.product,
+                "price": float(product.price)
+            }
+        }
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "success": False,
+            "error": str(e)
+        }
     finally:
         db.close()
 
