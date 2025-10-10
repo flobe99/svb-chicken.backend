@@ -176,7 +176,7 @@ def create_product(product: Product):
         db.close()
 
 @app.put("/product/{id}")
-def update_product(id: int, updated_product: ProductCreate):
+def update_product(id: int, updated_product: Product):
     db = SessionLocal()
     try:
         product = db.query(ProductDB).filter(ProductDB.id == id).first()
