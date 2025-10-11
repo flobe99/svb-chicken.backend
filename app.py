@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 import json
 
+from models import ConfigChicken, ConfigChickenDB
 from models.OrderChicken import OrderChicken
 from models.OrderChickenDB import Base, OrderChickenDB
 from models.Product import Product
@@ -337,6 +338,60 @@ def delete_product(id: int):
         db.delete(product)
         db.commit()
         return {"success": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+from fastapi import Path
+
+@app.post("/config")
+async def create_config(config: ConfigChicken):
+    db = SessionLocal()
+    try:
+        db_config = ConfigChickenDB(**config.dict(exclude={"id"}))
+        db.add(db_config)
+        db.commit()
+        db.refresh(db_config)
+        return {"success": True, "config": jsonable_encoder(db_config)}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/config/{config_id}")
+async def update_config(config_id: int = Path(...), config: ConfigChicken = None):
+    db = SessionLocal()
+    try:
+        db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == config_id).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Config not found")
+
+        for field, value in config.dict(exclude_unset=True).items():
+            setattr(db_config, field, value)
+
+        db.commit()
+        db.refresh(db_config)
+        return {"success": True, "config": jsonable_encoder(db_config)}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/config/{config_id}")
+async def delete_config(config_id: int = Path(...)):
+    db = SessionLocal()
+    try:
+        db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == config_id).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Config not found")
+
+        db.delete(db_config)
+        db.commit()
+        return {"success": True, "message": f"Config with ID {config_id} deleted"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
