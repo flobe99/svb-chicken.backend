@@ -18,3 +18,4 @@ class OrderChickenDB(Base):
     miscellaneous = Column(String)
     status = Column(String, default="CREATED")
     price = Column(Numeric(10, 2))
+    checked_in_at = Column(DateTime)
