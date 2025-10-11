@@ -359,10 +359,49 @@ def get_config(id: int):
     try:
         product = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
         if not product:
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise HTTPException(status_code=404, detail="Config not found")
         return product.__dict__
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
+# @app.put("/order/{id}")
+# async def update_order(id: int, updated_order: OrderChicken):
+
+@app.put("/config/{id}")
+def update_config(id: int, config: ConfigChicken = None):
+    db = SessionLocal()
+    try:
+        db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Config not found")
+
+        for field, value in config.dict(exclude_unset=True).items():
+            setattr(db_config, field, value)
+
+        db.commit()
+        db.refresh(db_config)
+        return {"success": True, "updated_config": db_config.__dict__}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/config/{id}")
+def delete_config(id: int):
+    db = SessionLocal()
+    try:
+        db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Config not found")
+
+        db.delete(db_config)
+        db.commit()
+        return {"success": True, "message": f"Config with ID {id} deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
