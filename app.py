@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
@@ -112,6 +113,66 @@ def get_orders(status: str = Query(None)):
         return [order.__dict__ for order in orders]
     except Exception as e:
         print("Error in /orders:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/orders/summary")
+def get_order_summary(date: str = Query(...), interval: str = Query(...)):
+    """
+    Liefert die Hähnchen-Summen für ein bestimmtes Datum und Zeitfenster.
+    Beispiel:
+    - date="2025-10-11"
+    - interval="17:00-20:00"
+    """
+    try:
+        db = SessionLocal()
+
+        # Zeitfenster parsen
+        try:
+            start_str, end_str = interval.split("-")
+            start_time = datetime.strptime(f"{date} {start_str}", "%Y-%m-%d %H:%M")
+            end_time = datetime.strptime(f"{date} {end_str}", "%Y-%m-%d %H:%M")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Ungültiges Zeitfenster")
+
+        # Intervall alle 15 Minuten
+        time_slots = []
+        current = start_time
+        while current <= end_time:
+            time_slots.append(current)
+            current += timedelta(minutes=15)
+
+        # Datenbankabfrage
+        orders = db.query(OrderChickenDB).filter(
+            OrderChickenDB.date >= start_time,
+            OrderChickenDB.date <= end_time
+        ).all()
+
+        # Aggregation
+        result = []
+        total = 0
+        for slot in time_slots:
+            slot_end = slot + timedelta(minutes=15)
+            count = sum(
+                order.chicken
+                for order in orders
+                if slot <= order.date < slot_end
+            )
+            total += count
+            result.append({
+                "time": slot.strftime("%H:%M"),
+                "chicken": count
+            })
+
+        return {
+            "date": date,
+            "interval": interval,
+            "slots": result,
+            "total": total
+        }
+
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
