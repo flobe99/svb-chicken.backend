@@ -9,7 +9,8 @@ import os
 from dotenv import load_dotenv
 import json
 
-from models import ConfigChicken, ConfigChickenDB
+from models.ConfigChicken import ConfigChicken
+from models.ConfigChickenDB import ConfigChickenDB
 from models.OrderChicken import OrderChicken
 from models.OrderChickenDB import Base, OrderChickenDB
 from models.Product import Product
