@@ -207,7 +207,7 @@ async def update_order(id: int, updated_order: OrderChicken):
 
         previous_status = order.status
 
-        for key, value in updated_order.dict().items():
+        for key, value in updated_order.dict(exclude_unset=True).items():
             setattr(order, key, value)
 
         order.price = total_price
