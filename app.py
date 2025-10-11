@@ -81,11 +81,7 @@ async def create_order(order: OrderChicken):
         db.commit()
         db.refresh(db_order)
 
-        clean_order = {
-            k: float(v) if isinstance(v, Decimal) else v
-            for k, v in db_order.__dict__.items()
-            if not k.startswith("_")
-        }
+        clean_order = jsonable_encoder(db_order)
 
         await broadcast_order_event(f"ORDER_{order.status}", clean_order)
 
