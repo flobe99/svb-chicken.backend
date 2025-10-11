@@ -366,9 +366,6 @@ def get_config(id: int):
     finally:
         db.close()
 
-# @app.put("/order/{id}")
-# async def update_order(id: int, updated_order: OrderChicken):
-
 @app.put("/config/{id}")
 def update_config(id: int, config: ConfigChicken = None):
     db = SessionLocal()
