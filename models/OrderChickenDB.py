@@ -1,6 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Integer, DateTime, Numeric
-from datetime import datetime
 
 Base = declarative_base()
 
@@ -12,7 +11,7 @@ class OrderChickenDB(Base):
     lastname = Column(String)
     mail = Column(String)
     phonenumber = Column(String)
-    date = Column(String)
+    date = Column(DateTime)
     chicken = Column(Integer)
     nuggets = Column(Integer)
     fries = Column(Integer)
