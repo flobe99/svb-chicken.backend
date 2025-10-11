@@ -253,6 +253,10 @@ def calculate_order_price(order: OrderChicken):
     db = SessionLocal()
     try:
         products = db.query(ProductDB).all()
+
+        if order.checked_in_at == "":
+            order.checked_in_at = None
+
         price_map = {p.product.lower(): float(p.price) for p in products}
 
         total_price = 0.0
