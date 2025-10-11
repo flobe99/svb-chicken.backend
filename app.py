@@ -201,10 +201,15 @@ async def update_order(id: int, updated_order: OrderChicken):
         total_price += updated_order.nuggets * price_map.get("nuggets", 0)
         total_price += updated_order.fries * price_map.get("fries", 0)
 
+        previous_status = order.status
+
         for key, value in updated_order.dict().items():
             setattr(order, key, value)
 
         order.price = total_price
+
+        if updated_order.status == "CHECKED_IN" and previous_status != "CHECKED_IN":
+            order.checked_in_at = datetime.utcnow()
 
         db.commit()
         db.refresh(order)
