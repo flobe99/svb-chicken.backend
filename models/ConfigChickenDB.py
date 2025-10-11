@@ -4,7 +4,7 @@ from sqlalchemy import Column, String, Integer, DateTime, Numeric
 Base = declarative_base()
 
 class ConfigChickenDB(Base):
-    __tablename__ = "orders"
+    __tablename__ = "config"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     chicken = Column(Integer)
