@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine
@@ -89,12 +90,9 @@ async def create_order(order: OrderChicken):
 
         return {
             "success": True,
-            "order": {
-                k: float(v) if isinstance(v, Decimal) else v
-                for k, v in db_order.__dict__.items()
-                if not k.startswith("_")
-            }
+            "order": jsonable_encoder(db_order)
         }
+    
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
