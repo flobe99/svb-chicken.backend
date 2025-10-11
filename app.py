@@ -116,7 +116,7 @@ def get_orders(status: str = Query(None)):
 @app.get("/orders/summary")
 def get_order_summary(date: str = Query(...), interval: str = Query(...)):
     """
-    Liefert die Hähnchen-Summen für ein bestimmtes Datum und Zeitfenster.
+    Liefert die Summen für Hähnchen, Nuggets und Pommes für ein bestimmtes Datum und Zeitfenster.
     Beispiel:
     - date="2025-10-11"
     - interval="17:00-20:00"
@@ -147,25 +147,36 @@ def get_order_summary(date: str = Query(...), interval: str = Query(...)):
 
         # Aggregation
         result = []
-        total = 0
+        total_chicken = 0
+        total_nuggets = 0
+        total_fries = 0
+
         for slot in time_slots:
             slot_end = slot + timedelta(minutes=15)
-            count = sum(
-                order.chicken
-                for order in orders
-                if slot <= order.date < slot_end
-            )
-            total += count
+            chicken_count = sum(order.chicken for order in orders if slot <= order.date < slot_end)
+            nuggets_count = sum(order.nuggets for order in orders if slot <= order.date < slot_end)
+            fries_count = sum(order.fries for order in orders if slot <= order.date < slot_end)
+
+            total_chicken += chicken_count
+            total_nuggets += nuggets_count
+            total_fries += fries_count
+
             result.append({
                 "time": slot.strftime("%H:%M"),
-                "chicken": count
+                "chicken": chicken_count,
+                "nuggets": nuggets_count,
+                "fries": fries_count
             })
 
         return {
             "date": date,
             "interval": interval,
             "slots": result,
-            "total": total
+            "total": {
+                "chicken": total_chicken,
+                "nuggets": total_nuggets,
+                "fries": total_fries
+            }
         }
 
     except Exception as e:
