@@ -193,6 +193,9 @@ async def update_order(id: int, updated_order: OrderChicken):
         order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
+        
+        if "checked_in_at" in updated_order.dict() and updated_order.checked_in_at is None:
+            order.checked_in_at = None
 
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
