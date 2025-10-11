@@ -194,7 +194,7 @@ async def update_order(id: int, updated_order: OrderChicken):
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        if "checked_in_at" in updated_order.dict() and updated_order.checked_in_at is None:
+        if updated_order.checked_in_at == "":
             order.checked_in_at = None
 
         products = db.query(ProductDB).all()
