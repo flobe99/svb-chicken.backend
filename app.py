@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Quer
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine
+from sqlalchemy import DateTime, cast, create_engine
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
@@ -145,8 +145,8 @@ def get_order_summary(date: str = Query(...), interval: str = Query(...)):
 
         # Datenbankabfrage
         orders = db.query(OrderChickenDB).filter(
-            OrderChickenDB.date >= start_time,
-            OrderChickenDB.date <= end_time
+            cast(OrderChickenDB.date, DateTime) >= start_time,
+            cast(OrderChickenDB.date, DateTime) <= end_time
         ).all()
 
         # Aggregation
