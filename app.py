@@ -353,7 +353,19 @@ def delete_product(id: int):
     finally:
         db.close()
 
-from fastapi import Path
+@app.get("/config")
+async def get_config():
+    db = SessionLocal()
+    try:
+        db_config = db.query(ConfigChickenDB).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Config not found")
+        return {"success": True, "config": jsonable_encoder(db_config)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
 
 @app.post("/config")
 async def create_config(config: ConfigChicken):
