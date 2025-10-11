@@ -26,4 +26,4 @@ class OrderChicken(BaseModel):
     miscellaneous: str
     status: OrderStatus = OrderStatus.CREATED
     price: float
-    checked_in_at: datetime
+    checked_in_at: Optional[datetime] = None
