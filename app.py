@@ -99,7 +99,6 @@ async def create_order(order: OrderChicken):
     finally:
         db.close()
 
-
 @app.get("/orders")
 def get_orders(status: str = Query(None)):
     print("GET /orders called with status:", status)
@@ -141,7 +140,7 @@ async def update_order(id: int, updated_order: OrderChicken):
         db.commit()
         db.refresh(order)
 
-        clean_order = {k: v for k, v in order.__dict__.items() if not k.startswith("_")}
+        clean_order = jsonable_encoder(order)
 
         await broadcast_order_event(f"ORDER_{updated_order.status}", clean_order)
 
