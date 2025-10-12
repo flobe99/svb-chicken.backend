@@ -76,9 +76,8 @@ async def create_order(order: OrderChicken):
         slot_end = slot_start + timedelta(minutes=15)
 
         orders_in_slot = db.query(OrderChickenDB).filter(
-            OrderChickenDB.date >= slot_start,
-            OrderChickenDB.date < slot_end
-        ).all()
+            OrderChickenDB.date == order.date
+        )
 
         used_chicken = sum(o.chicken for o in orders_in_slot)
         used_nuggets = sum(o.nuggets for o in orders_in_slot)
