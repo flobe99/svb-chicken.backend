@@ -84,6 +84,12 @@ async def create_order(order: OrderChicken):
         used_nuggets = sum(o.nuggets for o in orders_in_slot)
         used_fries = sum(o.fries for o in orders_in_slot)
 
+        print("Konfiguration:", config.fries)
+        print("Bestellungen im Slot:", len(orders_in_slot))
+        print("Verbrauchte Mengen:", used_chicken, used_nuggets, used_fries)
+        print("Neue Bestellung:", order.chicken, order.nuggets, order.fries)
+
+
         if used_chicken + order.chicken > config.chicken:
             raise HTTPException(status_code=400, detail="Maximale Hähnchenmenge überschritten für dieses Zeitfenster.")
         if used_nuggets + order.nuggets > config.nuggets:
