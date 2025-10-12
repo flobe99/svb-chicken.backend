@@ -68,13 +68,37 @@ async def base_path():
 async def create_order(order: OrderChicken):
     db = SessionLocal()
     try:
+        config = db.query(ConfigChickenDB).first()
+        if not config:
+            raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
+
+        slot_start = order.date
+        slot_end = slot_start + timedelta(minutes=15)
+
+        orders_in_slot = db.query(OrderChickenDB).filter(
+            OrderChickenDB.date >= slot_start,
+            OrderChickenDB.date < slot_end
+        ).all()
+
+        used_chicken = sum(o.chicken for o in orders_in_slot)
+        used_nuggets = sum(o.nuggets for o in orders_in_slot)
+        used_fries = sum(o.fries for o in orders_in_slot)
+
+        if used_chicken + order.chicken > config.chicken:
+            raise HTTPException(status_code=400, detail="Maximale Hähnchenmenge überschritten für dieses Zeitfenster.")
+        if used_nuggets + order.nuggets > config.nuggets:
+            raise HTTPException(status_code=400, detail="Maximale Nuggetsmenge überschritten für dieses Zeitfenster.")
+        if used_fries + order.fries > config.fries:
+            raise HTTPException(status_code=400, detail="Maximale Pommesmenge überschritten für dieses Zeitfenster.")
+
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
 
-        total_price = 0.0
-        total_price += order.chicken * price_map.get("chicken", 0)
-        total_price += order.nuggets * price_map.get("nuggets", 0)
-        total_price += order.fries * price_map.get("fries", 0)
+        total_price = (
+            order.chicken * price_map.get("chicken", 0) +
+            order.nuggets * price_map.get("nuggets", 0) +
+            order.fries * price_map.get("fries", 0)
+        )
 
         db_order = OrderChickenDB(**{k: v for k, v in order.dict().items() if k != "id"})
         db_order.price = total_price
@@ -84,14 +108,13 @@ async def create_order(order: OrderChicken):
         db.refresh(db_order)
 
         clean_order = jsonable_encoder(db_order)
-
         await broadcast_order_event(f"ORDER_{order.status}", clean_order)
 
         return {
             "success": True,
-            "order": jsonable_encoder(db_order)
+            "order": clean_order
         }
-    
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
