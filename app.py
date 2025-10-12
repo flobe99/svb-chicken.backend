@@ -72,12 +72,13 @@ async def create_order(order: OrderChicken):
         if not config:
             raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
 
-        slot_start = order.date
+        slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
         slot_end = slot_start + timedelta(minutes=15)
 
         orders_in_slot = db.query(OrderChickenDB).filter(
-            OrderChickenDB.date == order.date
-        )
+            OrderChickenDB.date >= slot_start,
+            OrderChickenDB.date < slot_end
+        ).all()
 
         used_chicken = sum(o.chicken for o in orders_in_slot)
         used_nuggets = sum(o.nuggets for o in orders_in_slot)
@@ -88,13 +89,16 @@ async def create_order(order: OrderChicken):
         print("Verbrauchte Mengen:", used_chicken, used_nuggets, used_fries)
         print("Neue Bestellung:", order.chicken, order.nuggets, order.fries)
 
+        print("if:", used_chicken + order.chicken)
+        print(">")
+        print("if:", config.chicken)
 
         if used_chicken + order.chicken > config.chicken:
-            raise HTTPException(status_code=400, detail="Maximale Hähnchenmenge überschritten für dieses Zeitfenster.")
+            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
         if used_nuggets + order.nuggets > config.nuggets:
-            raise HTTPException(status_code=400, detail="Maximale Nuggetsmenge überschritten für dieses Zeitfenster.")
+            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
         if used_fries + order.fries > config.fries:
-            raise HTTPException(status_code=400, detail="Maximale Pommesmenge überschritten für dieses Zeitfenster.")
+            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
 
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
@@ -119,6 +123,10 @@ async def create_order(order: OrderChicken):
             "success": True,
             "order": clean_order
         }
+
+    except HTTPException as http_exc:
+        db.rollback()
+        raise http_exc
 
     except Exception as e:
         db.rollback()
