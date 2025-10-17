@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
 from enum import Enum
@@ -18,10 +19,11 @@ class OrderChicken(BaseModel):
     lastname: str
     mail: str
     phonenumber: str
-    date: str
+    date: datetime  
     chicken: int
     nuggets: int
     fries: int
     miscellaneous: str
     status: OrderStatus = OrderStatus.CREATED
     price: float
+    checked_in_at: Optional[datetime] = None

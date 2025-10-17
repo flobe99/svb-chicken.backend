@@ -1,12 +1,16 @@
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine
+from sqlalchemy import DateTime, cast, create_engine
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 import json
 
+from models.ConfigChicken import ConfigChicken
+from models.ConfigChickenDB import ConfigChickenDB
 from models.OrderChicken import OrderChicken
 from models.OrderChickenDB import Base, OrderChickenDB
 from models.Product import Product
@@ -97,13 +101,46 @@ async def create_order(order: OrderChicken):
     """
     db = SessionLocal()
     try:
+        config = db.query(ConfigChickenDB).first()
+        if not config:
+            raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
+
+        slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
+        slot_end = slot_start + timedelta(minutes=15)
+
+        orders_in_slot = db.query(OrderChickenDB).filter(
+            OrderChickenDB.date >= slot_start,
+            OrderChickenDB.date < slot_end
+        ).all()
+
+        used_chicken = sum(o.chicken for o in orders_in_slot)
+        used_nuggets = sum(o.nuggets for o in orders_in_slot)
+        used_fries = sum(o.fries for o in orders_in_slot)
+
+        print("Konfiguration:", config.fries)
+        print("Bestellungen im Slot:", len(orders_in_slot))
+        print("Verbrauchte Mengen:", used_chicken, used_nuggets, used_fries)
+        print("Neue Bestellung:", order.chicken, order.nuggets, order.fries)
+
+        print("if:", used_chicken + order.chicken)
+        print(">")
+        print("if:", config.chicken)
+
+        if used_chicken + order.chicken > config.chicken:
+            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
+        if used_nuggets + order.nuggets > config.nuggets:
+            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
+        if used_fries + order.fries > config.fries:
+            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
+
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
 
-        total_price = 0.0
-        total_price += order.chicken * price_map.get("chicken", 0)
-        total_price += order.nuggets * price_map.get("nuggets", 0)
-        total_price += order.fries * price_map.get("fries", 0)
+        total_price = (
+            order.chicken * price_map.get("chicken", 0) +
+            order.nuggets * price_map.get("nuggets", 0) +
+            order.fries * price_map.get("fries", 0)
+        )
 
         db_order = OrderChickenDB(**{k: v for k, v in order.dict().items() if k != "id"})
         db_order.price = total_price
@@ -112,28 +149,23 @@ async def create_order(order: OrderChicken):
         db.commit()
         db.refresh(db_order)
 
-        clean_order = {
-            k: float(v) if isinstance(v, Decimal) else v
-            for k, v in db_order.__dict__.items()
-            if not k.startswith("_")
-        }
-
+        clean_order = jsonable_encoder(db_order)
         await broadcast_order_event(f"ORDER_{order.status}", clean_order)
 
         return {
             "success": True,
-            "order": {
-                k: float(v) if isinstance(v, Decimal) else v
-                for k, v in db_order.__dict__.items()
-                if not k.startswith("_")
-            }
+            "order": clean_order
         }
+
+    except HTTPException as http_exc:
+        db.rollback()
+        raise http_exc
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
-
 
 @app.get("/orders")
 def get_orders(status: str = Query(None)):
@@ -161,6 +193,77 @@ def get_orders(status: str = Query(None)):
     finally:
         db.close()
 
+@app.get("/orders/summary")
+def get_order_summary(date: str = Query(...), interval: str = Query(...)):
+    """
+    Liefert die Summen für Hähnchen, Nuggets und Pommes für ein bestimmtes Datum und Zeitfenster.
+    Beispiel:
+    - date="2025-10-11"
+    - interval="17:00-20:00"
+    """
+    try:
+        db = SessionLocal()
+
+        # Zeitfenster parsen
+        try:
+            start_str, end_str = interval.split("-")
+            start_time = datetime.strptime(f"{date} {start_str}", "%Y-%m-%d %H:%M")
+            end_time = datetime.strptime(f"{date} {end_str}", "%Y-%m-%d %H:%M")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Ungültiges Zeitfenster")
+
+        # Intervall alle 15 Minuten
+        time_slots = []
+        current = start_time
+        while current <= end_time:
+            time_slots.append(current)
+            current += timedelta(minutes=15)
+
+        # Datenbankabfrage
+        orders = db.query(OrderChickenDB).filter(
+            cast(OrderChickenDB.date, DateTime) >= start_time,
+            cast(OrderChickenDB.date, DateTime) <= end_time
+        ).all()
+
+        # Aggregation
+        result = []
+        total_chicken = 0
+        total_nuggets = 0
+        total_fries = 0
+
+        for slot in time_slots:
+            slot_end = slot + timedelta(minutes=15)
+            chicken_count = sum(order.chicken for order in orders if slot <= order.date < slot_end)
+            nuggets_count = sum(order.nuggets for order in orders if slot <= order.date < slot_end)
+            fries_count = sum(order.fries for order in orders if slot <= order.date < slot_end)
+
+            total_chicken += chicken_count
+            total_nuggets += nuggets_count
+            total_fries += fries_count
+
+            result.append({
+                "time": slot.strftime("%H:%M"),
+                "chicken": chicken_count,
+                "nuggets": nuggets_count,
+                "fries": fries_count
+            })
+
+        return {
+            "date": date,
+            "interval": interval,
+            "slots": result,
+            "total": {
+                "chicken": total_chicken,
+                "nuggets": total_nuggets,
+                "fries": total_fries
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
 @app.put("/order/{id}")
 async def update_order(id: int, updated_order: OrderChicken):
     """
@@ -178,6 +281,9 @@ async def update_order(id: int, updated_order: OrderChicken):
         order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
+        
+        if updated_order.checked_in_at == "":
+            order.checked_in_at = None
 
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
@@ -187,15 +293,20 @@ async def update_order(id: int, updated_order: OrderChicken):
         total_price += updated_order.nuggets * price_map.get("nuggets", 0)
         total_price += updated_order.fries * price_map.get("fries", 0)
 
-        for key, value in updated_order.dict().items():
+        previous_status = order.status
+
+        for key, value in updated_order.dict(exclude_unset=True).items():
             setattr(order, key, value)
 
         order.price = total_price
 
+        if updated_order.status == "CHECKED_IN" and previous_status != "CHECKED_IN":
+            order.checked_in_at = datetime.utcnow()
+
         db.commit()
         db.refresh(order)
 
-        clean_order = {k: v for k, v in order.__dict__.items() if not k.startswith("_")}
+        clean_order = jsonable_encoder(order)
 
         await broadcast_order_event(f"ORDER_{updated_order.status}", clean_order)
 
@@ -248,6 +359,12 @@ def calculate_order_price(order: OrderChicken):
     db = SessionLocal()
     try:
         products = db.query(ProductDB).all()
+        print(order)
+        if order.checked_in_at == "":
+            order.checked_in_at = None
+
+        print(order)
+
         price_map = {p.product.lower(): float(p.price) for p in products}
 
         total_price = 0.0
@@ -385,6 +502,56 @@ def delete_product(id: int):
         db.delete(product)
         db.commit()
         return {"success": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/config/{id}")
+def get_config(id: int):
+    db = SessionLocal()
+    try:
+        product = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Config not found")
+        return product.__dict__
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/config/{id}")
+def update_config(id: int, config: ConfigChicken = None):
+    db = SessionLocal()
+    try:
+        db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Config not found")
+
+        for field, value in config.dict(exclude_unset=True).items():
+            setattr(db_config, field, value)
+
+        db.commit()
+        db.refresh(db_config)
+        return {"success": True, "updated_config": db_config.__dict__}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/config/{id}")
+def delete_config(id: int):
+    db = SessionLocal()
+    try:
+        db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Config not found")
+
+        db.delete(db_config)
+        db.commit()
+        return {"success": True, "message": f"Config with ID {id} deleted"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
