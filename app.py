@@ -47,6 +47,15 @@ active_connections: list[WebSocket] = []
 
 @app.websocket("/ws/orders")
 async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for receiving order events.
+
+    Accepts a WebSocket connection and keeps it open until the client disconnects.
+    Messages received from the client are ignored in this implementation.
+
+    Args:
+        websocket (WebSocket): The incoming WebSocket connection.
+    """
     await websocket.accept()
     active_connections.append(websocket)
     try:
@@ -56,6 +65,15 @@ async def websocket_endpoint(websocket: WebSocket):
         active_connections.remove(websocket)
 
 async def broadcast_order_event(event_type: str, order_data: dict):
+    """
+    Broadcasts an order event to all active WebSocket connections.
+
+    Sends a JSON-formatted message containing the event type and order data.
+
+    Args:
+        event_type (str): The type of event (e.g., "created", "updated").
+        order_data (dict): The order data to be sent to clients.
+    """
     message = json.dumps({
         "event": event_type,
         "data": order_data
@@ -65,10 +83,25 @@ async def broadcast_order_event(event_type: str, order_data: dict):
 
 @app.get("/")
 async def base_path():
+    """
+    Root endpoint to verify that the API is running.
+
+    Returns:
+        dict: A success message.
+    """
     return {"success": True}
 
 @app.post("/order")
 async def create_order(order: OrderChicken):
+    """
+    Creates a new order and calculates its total price.
+
+    Args:
+        order (OrderChicken): The order data submitted by the client.
+
+    Returns:
+        dict: A success flag and the created order with calculated price.
+    """
     db = SessionLocal()
     try:
         config = db.query(ConfigChickenDB).first()
@@ -139,6 +172,15 @@ async def create_order(order: OrderChicken):
 
 @app.get("/orders")
 def get_orders(status: str = Query(None)):
+    """
+    Retrieves all orders, optionally filtered by status.
+
+    Args:
+        status (str, optional): Filter orders by their status.
+
+    Returns:
+        list: A list of order dictionaries.
+    """
     print("GET /orders called with status:", status)
     db = SessionLocal()
     try:
@@ -227,6 +269,16 @@ def get_order_summary(date: str = Query(...), interval: str = Query(...)):
 
 @app.put("/order/{id}")
 async def update_order(id: int, updated_order: OrderChicken):
+    """
+    Updates an existing order and recalculates its price.
+
+    Args:
+        id (int): The ID of the order to update.
+        updated_order (OrderChicken): The updated order data.
+
+    Returns:
+        dict: A success flag and the updated order.
+    """
     db = SessionLocal()
     try:
         order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
@@ -272,6 +324,15 @@ async def update_order(id: int, updated_order: OrderChicken):
 # Bestellung löschen
 @app.delete("/order/{id}")
 def delete_order(id: str):
+    """
+    Deletes an order by its ID.
+
+    Args:
+        id (str): The ID of the order to delete.
+
+    Returns:
+        dict: A success flag if deletion was successful.
+    """
     db = SessionLocal()
     try:
         order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
@@ -289,6 +350,15 @@ def delete_order(id: str):
 
 @app.post("/order/price")
 def calculate_order_price(order: OrderChicken):
+    """
+    Calculates the total price of an order without saving it.
+
+    Args:
+        order (OrderChicken): The order data to price.
+
+    Returns:
+        dict: The calculated price.
+    """
     db = SessionLocal()
     try:
         products = db.query(ProductDB).all()
@@ -313,6 +383,12 @@ def calculate_order_price(order: OrderChicken):
 
 @app.get("/products")
 def get_products():
+    """
+    Retrieves all available products.
+
+    Returns:
+        list: A list of product dictionaries.
+    """
     db = SessionLocal()
     try:
         products = db.query(ProductDB).all()
@@ -324,6 +400,15 @@ def get_products():
 
 @app.get("/product/{id}")
 def get_product(id: int):
+    """
+    Retrieves a single product by its ID.
+
+    Args:
+        id (int): The ID of the product to retrieve.
+
+    Returns:
+        dict: The product data.
+    """
     db = SessionLocal()
     try:
         product = db.query(ProductDB).filter(ProductDB.id == id).first()
@@ -337,6 +422,15 @@ def get_product(id: int):
 
 @app.post("/product")
 def create_product(product: Product):
+    """
+    Creates a new product entry.
+
+    Args:
+        product (Product): The product data to store.
+
+    Returns:
+        dict: The created product data.
+    """
     db = SessionLocal()
     db_product = ProductDB(**{k: v for k, v in product.dict().items() if k != "id"})
     try:
@@ -352,6 +446,16 @@ def create_product(product: Product):
 
 @app.put("/product/{id}")
 def update_product(id: int, updated_product: Product):
+    """
+    Updates an existing product.
+
+    Args:
+        id (int): The ID of the product to update.
+        updated_product (Product): The new product data.
+
+    Returns:
+        dict: A success flag and the updated product data.
+    """
     db = SessionLocal()
     try:
         product = db.query(ProductDB).filter(ProductDB.id == id).first()
@@ -383,6 +487,15 @@ def update_product(id: int, updated_product: Product):
 
 @app.delete("/product/{id}")
 def delete_product(id: int):
+    """
+    Deletes a product by its ID.
+
+    Args:
+        id (int): The ID of the product to delete.
+
+    Returns:
+        dict: A success flag if deletion was successful.
+    """
     db = SessionLocal()
     try:
         product = db.query(ProductDB).filter(ProductDB.id == id).first()
