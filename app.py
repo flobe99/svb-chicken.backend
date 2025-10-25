@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Quer
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import DateTime, cast, create_engine
+from sqlalchemy import DateTime, asc, cast, create_engine
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
