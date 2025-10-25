@@ -565,7 +565,7 @@ def delete_config(id: int):
 def get_all_slots():
     db = SessionLocal()
     try:
-        slots = db.query(SlotDB).all()
+        slots = db.query(SlotDB).order_by(asc(SlotDB.range_start)).all()
         return [slot.__dict__ for slot in slots]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
