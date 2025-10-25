@@ -17,6 +17,9 @@ from models.Product import Product
 from models.ProductDB import Base, ProductDB
 from decimal import Decimal
 
+from models.Slot import Slot
+from models.SlotDB import SlotDB
+
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -439,6 +442,82 @@ def delete_config(id: int):
         db.delete(db_config)
         db.commit()
         return {"success": True, "message": f"Config with ID {id} deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/slots")
+def get_all_slots():
+    db = SessionLocal()
+    try:
+        slots = db.query(SlotDB).all()
+        return [slot.__dict__ for slot in slots]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/slots/{id}")
+def get_slot(id: int):
+    db = SessionLocal()
+    try:
+        slot = db.query(SlotDB).filter(SlotDB.id == id).first()
+        if not slot:
+            raise HTTPException(status_code=404, detail="Slot not found")
+        return slot.__dict__
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.post("/slots")
+def create_slot(slot: Slot):
+    db = SessionLocal()
+    try:
+        new_slot = SlotDB(**slot.dict())
+        db.add(new_slot)
+        db.commit()
+        db.refresh(new_slot)
+        return {"success": True, "created_slot": new_slot.__dict__}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/slots/{id}")
+def update_slot(id: int, slot: Slot):
+    db = SessionLocal()
+    try:
+        db_slot = db.query(SlotDB).filter(SlotDB.id == id).first()
+        if not db_slot:
+            raise HTTPException(status_code=404, detail="Slot not found")
+
+        for field, value in slot.dict(exclude_unset=True).items():
+            setattr(db_slot, field, value)
+
+        db.commit()
+        db.refresh(db_slot)
+        return {"success": True, "updated_slot": db_slot.__dict__}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/slots/{id}")
+def delete_slot(id: int):
+    db = SessionLocal()
+    try:
+        db_slot = db.query(SlotDB).filter(SlotDB.id == id).first()
+        if not db_slot:
+            raise HTTPException(status_code=404, detail="Slot not found")
+
+        db.delete(db_slot)
+        db.commit()
+        return {"success": True, "message": f"Slot with ID {id} deleted"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
