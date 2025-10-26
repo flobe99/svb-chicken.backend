@@ -200,11 +200,9 @@ def get_orders(status: str = Query(None)):
 def validate_order(order: OrderChicken):
     db = SessionLocal()
     try:
-        # Prüfe, ob Uhrzeit auf Viertelstunde liegt
         if not _is_quarter_hour(order.date):
             raise HTTPException(status_code=400, detail="Uhrzeit muss auf eine Viertelstunde liegen (z. B. 12:15)")
 
-        # Prüfe, ob die Bestellung in einem Slot liegt
         matching_slot = db.query(SlotDB).filter(
             SlotDB.range_start <= order.date,
             SlotDB.range_end > order.date
@@ -215,8 +213,10 @@ def validate_order(order: OrderChicken):
 
         return {"valid": True, "message": "Bestellung ist gültig", "slot_id": matching_slot.id}
 
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Interner Serverfehler: " + str(e))
     finally:
         db.close()
 
@@ -662,4 +662,4 @@ def delete_slot(id: int):
         db.close()
 
 def _is_quarter_hour(dt: datetime) -> bool:
-    return dt.minute in [0, 15, 30, 45] and dt.second == 0 and dt.microsecond == 0
+    return dt.minute in [0, 15, 30, 45]
