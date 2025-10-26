@@ -200,16 +200,14 @@ def get_orders(status: str = Query(None)):
 def validate_order(order: OrderChicken):
     db = SessionLocal()
     try:
-        order_datetime = datetime.combine(order.date, order.time)
-
         # Prüfe, ob Uhrzeit auf Viertelstunde liegt
-        if not _is_quarter_hour(order_datetime):
+        if not _is_quarter_hour(order.date):
             raise HTTPException(status_code=400, detail="Uhrzeit muss auf eine Viertelstunde liegen (z. B. 12:15)")
 
         # Prüfe, ob die Bestellung in einem Slot liegt
         matching_slot = db.query(SlotDB).filter(
-            SlotDB.range_start <= order_datetime,
-            SlotDB.range_end > order_datetime
+            SlotDB.range_start <= order.date,
+            SlotDB.range_end > order.date
         ).first()
 
         if not matching_slot:
