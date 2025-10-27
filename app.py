@@ -205,7 +205,7 @@ def validate_order(order: OrderChicken):
 
         matching_slot = db.query(SlotDB).filter(
             SlotDB.range_start <= order.date,
-            SlotDB.range_end > order.date
+            SlotDB.range_end >= order.date
         ).first()
 
         if not matching_slot:
