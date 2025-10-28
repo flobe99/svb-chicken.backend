@@ -11,6 +11,7 @@ import json
 
 from models.ConfigChicken import ConfigChicken
 from models.ConfigChickenDB import ConfigChickenDB
+from models.LimitCode import LimitCode
 from models.OrderChicken import OrderChicken
 from models.OrderChickenDB import Base, OrderChickenDB
 from models.Product import Product
@@ -22,9 +23,6 @@ from models.SlotDB import SlotDB
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-print("DATABASE_URL:", DATABASE_URL)
-
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
@@ -92,6 +90,10 @@ async def base_path():
     return {"success": True}
 
 def _check_slot_limit(order: OrderChicken, db):
+
+    if not _is_quarter_hour(order.date):
+        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.TIME,"detail":"Uhrzeit muss auf eine Viertelstunde liegen (z. B. 12:15)"})
+    
     config = db.query(ConfigChickenDB).first()
     if not config:
         raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
@@ -108,11 +110,11 @@ def _check_slot_limit(order: OrderChicken, db):
     used_fries = sum(o.fries for o in orders_in_slot)
 
     if used_chicken + order.chicken > config.chicken:
-        raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
+        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.CHICKEN,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
     if used_nuggets + order.nuggets > config.nuggets:
-        raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
+        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.NUGGETS,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
     if used_fries + order.fries > config.fries:
-        raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
+        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.FRIES,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
 
 @app.post("/order")
 async def create_order(order: OrderChicken):
@@ -127,29 +129,6 @@ async def create_order(order: OrderChicken):
     """
     db = SessionLocal()
     try:
-        # config = db.query(ConfigChickenDB).first()
-        # if not config:
-        #     raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
-
-        # slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
-        # slot_end = slot_start + timedelta(minutes=15)
-
-        # orders_in_slot = db.query(OrderChickenDB).filter(
-        #     OrderChickenDB.date >= slot_start,
-        #     OrderChickenDB.date < slot_end
-        # ).all()
-
-        # used_chicken = sum(o.chicken for o in orders_in_slot)
-        # used_nuggets = sum(o.nuggets for o in orders_in_slot)
-        # used_fries = sum(o.fries for o in orders_in_slot)
-
-        # if used_chicken + order.chicken > config.chicken:
-        #     raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
-        # if used_nuggets + order.nuggets > config.nuggets:
-        #     raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
-        # if used_fries + order.fries > config.fries:
-        #     raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
-
         _check_slot_limit(order, db)
 
         products = db.query(ProductDB).all()
@@ -197,14 +176,12 @@ def get_orders(status: str = Query(None)):
     Returns:
         list: A list of order dictionaries.
     """
-    print("GET /orders called with status:", status)
     db = SessionLocal()
     try:
         query = db.query(OrderChickenDB)
         if status:
             query = query.filter(OrderChickenDB.status == status)
         orders = query.all()
-        print("Orders fetched:", orders)
         return [order.__dict__ for order in orders]
     except Exception as e:
         print("Error in /orders:", str(e))
@@ -215,9 +192,8 @@ def get_orders(status: str = Query(None)):
 @app.post("/validate-order")
 def validate_order(order: OrderChicken):
     db = SessionLocal()
-    try:
-        if not _is_quarter_hour(order.date):
-            raise HTTPException(status_code=400, detail="Uhrzeit muss auf eine Viertelstunde liegen (z. B. 12:15)")
+    try:        
+        _check_slot_limit()
 
         matching_slot = db.query(SlotDB).filter(
             SlotDB.range_start <= order.date,
@@ -328,6 +304,8 @@ async def update_order(id: int, updated_order: OrderChicken):
         if updated_order.checked_in_at == "":
             order.checked_in_at = None
 
+        _check_slot_limit(order, db)
+
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
 
@@ -402,11 +380,8 @@ def calculate_order_price(order: OrderChicken):
     db = SessionLocal()
     try:
         products = db.query(ProductDB).all()
-        print(order)
         if order.checked_in_at == "":
             order.checked_in_at = None
-
-        print(order)
 
         price_map = {p.product.lower(): float(p.price) for p in products}
 

@@ -1,0 +1,7 @@
+from enum import Enum
+
+class LimitCode(str, Enum):
+    CHICKEN = "LIMIT_CHICKEN_EXCEEDED"
+    NUGGETS = "LIMIT_NUGGETS_EXCEEDED"
+    FRIES = "LIMIT_FRIES_EXCEEDED"
+    TIME = "INVALID_TIME_SLOT"
