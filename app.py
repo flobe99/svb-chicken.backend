@@ -193,7 +193,7 @@ def get_orders(status: str = Query(None)):
 def validate_order(order: OrderChicken):
     db = SessionLocal()
     try:        
-        _check_slot_limit()
+        _check_slot_limit(order, db)
 
         matching_slot = db.query(SlotDB).filter(
             SlotDB.range_start <= order.date,
