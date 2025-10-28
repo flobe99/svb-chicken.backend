@@ -137,7 +137,7 @@ def _check_slot_limit(order: OrderChicken, db):
                 "detail": "Maximale Nuggetsmenge für dieses Zeitfenster überschritten."
             })
 
-    if order.nuggets > 0:
+    if order.fries > 0:
         used_fries = sum(o.fries for o in orders_in_slot)
         if used_fries + order.fries > config.fries:
             errors.append({
@@ -227,15 +227,7 @@ def validate_order(order: OrderChicken):
     try:        
         _check_slot_limit(order, db)
 
-        matching_slot = db.query(SlotDB).filter(
-            SlotDB.range_start <= order.date,
-            SlotDB.range_end >= order.date
-        ).first()
-
-        if not matching_slot:
-            raise HTTPException(status_code=400, detail="Bestellzeit liegt außerhalb der verfügbaren Slots")
-
-        return {"valid": True, "message": "Bestellung ist gültig", "slot_id": matching_slot.id}
+        return {"valid": True, "message": "Bestellung ist gültig"}
 
     except HTTPException as http_exc:
         raise http_exc
