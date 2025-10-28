@@ -92,6 +92,17 @@ async def base_path():
 def _check_slot_limit(order: OrderChicken, db):
     errors = []
 
+    matching_slot = db.query(SlotDB).filter(
+        SlotDB.range_start <= order.date,
+        SlotDB.range_end >= order.date
+    ).first()
+
+    if not matching_slot:
+        errors.append({
+            "code": LimitCode.SLOT,
+            "detail": "Bestellzeit liegt außerhalb der verfügbaren Slots"
+        })
+
     if not _is_quarter_hour(order.date):
         errors.append({
             "code": LimitCode.TIME,
