@@ -90,13 +90,18 @@ async def base_path():
     return {"success": True}
 
 def _check_slot_limit(order: OrderChicken, db):
+    errors = []
 
     if not _is_quarter_hour(order.date):
-        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.TIME,"detail":"Uhrzeit muss auf eine Viertelstunde liegen (z. B. 12:15)"})
-    
+        errors.append({
+            "code": LimitCode.TIME,
+            "detail": "Uhrzeit muss auf eine Viertelstunde liegen (z. B. 12:15)"
+        })
+
     config = db.query(ConfigChickenDB).first()
     if not config:
         raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
+
     slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
     slot_end = slot_start + timedelta(minutes=15)
 
@@ -110,11 +115,23 @@ def _check_slot_limit(order: OrderChicken, db):
     used_fries = sum(o.fries for o in orders_in_slot)
 
     if used_chicken + order.chicken > config.chicken:
-        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.CHICKEN,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
+        errors.append({
+            "code": LimitCode.CHICKEN,
+            "detail": "Maximale Hähnchenmenge überschritten für dieses Zeitfenster."
+        })
     if used_nuggets + order.nuggets > config.nuggets:
-        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.NUGGETS,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
+        errors.append({
+            "code": LimitCode.NUGGETS,
+            "detail": "Maximale Nuggetsmenge überschritten für dieses Zeitfenster."
+        })
     if used_fries + order.fries > config.fries:
-        raise HTTPException(status_code=400, detail={"success": False,"code": LimitCode.FRIES,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
+        errors.append({
+            "code": LimitCode.FRIES,
+            "detail": "Maximale Pommesmenge überschritten für dieses Zeitfenster."
+        })
+
+    if errors:
+        raise HTTPException(status_code=400, detail={"success": False, "errors": errors})
 
 @app.post("/order")
 async def create_order(order: OrderChicken):
