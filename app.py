@@ -119,27 +119,31 @@ def _check_slot_limit(order: OrderChicken, db):
     orders_in_slot = db.query(OrderChickenDB).filter(
         OrderChickenDB.date >= slot_start,
         OrderChickenDB.date < slot_end
-    ).all()
+    ).all()   
+    
+    if order.chicken > 0:
+        used_chicken = sum(o.chicken for o in orders_in_slot)
+        if used_chicken + order.chicken > config.chicken:
+            errors.append({
+                "code": LimitCode.CHICKEN,
+                "detail": "Maximale Hähnchenmenge für dieses Zeitfenster überschritten."
+            })
 
-    used_chicken = sum(o.chicken for o in orders_in_slot)
-    used_nuggets = sum(o.nuggets for o in orders_in_slot)
-    used_fries = sum(o.fries for o in orders_in_slot)
+    if order.nuggets > 0:
+        used_nuggets = sum(o.nuggets for o in orders_in_slot)
+        if used_nuggets + order.nuggets > config.nuggets:
+            errors.append({
+                "code": LimitCode.NUGGETS,
+                "detail": "Maximale Nuggetsmenge für dieses Zeitfenster überschritten."
+            })
 
-    if used_chicken + order.chicken > config.chicken:
-        errors.append({
-            "code": LimitCode.CHICKEN,
-            "detail": "Maximale Hähnchenmenge überschritten für dieses Zeitfenster."
-        })
-    if used_nuggets + order.nuggets > config.nuggets:
-        errors.append({
-            "code": LimitCode.NUGGETS,
-            "detail": "Maximale Nuggetsmenge überschritten für dieses Zeitfenster."
-        })
-    if used_fries + order.fries > config.fries:
-        errors.append({
-            "code": LimitCode.FRIES,
-            "detail": "Maximale Pommesmenge überschritten für dieses Zeitfenster."
-        })
+    if order.nuggets > 0:
+        used_fries = sum(o.fries for o in orders_in_slot)
+        if used_fries + order.fries > config.fries:
+            errors.append({
+                "code": LimitCode.FRIES,
+                "detail": "Maximale Pommesmenge für dieses Zeitfenster überschritten."
+            })
 
     if errors:
         raise HTTPException(status_code=400, detail={"success": False, "errors": errors})
