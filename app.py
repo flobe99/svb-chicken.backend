@@ -91,6 +91,29 @@ async def base_path():
     """
     return {"success": True}
 
+def _check_slot_limit(order: OrderChicken, db):
+    config = db.query(ConfigChickenDB).first()
+    if not config:
+        raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
+    slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
+    slot_end = slot_start + timedelta(minutes=15)
+
+    orders_in_slot = db.query(OrderChickenDB).filter(
+        OrderChickenDB.date >= slot_start,
+        OrderChickenDB.date < slot_end
+    ).all()
+
+    used_chicken = sum(o.chicken for o in orders_in_slot)
+    used_nuggets = sum(o.nuggets for o in orders_in_slot)
+    used_fries = sum(o.fries for o in orders_in_slot)
+
+    if used_chicken + order.chicken > config.chicken:
+        raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
+    if used_nuggets + order.nuggets > config.nuggets:
+        raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
+    if used_fries + order.fries > config.fries:
+        raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
+
 @app.post("/order")
 async def create_order(order: OrderChicken):
     """
@@ -104,37 +127,30 @@ async def create_order(order: OrderChicken):
     """
     db = SessionLocal()
     try:
-        config = db.query(ConfigChickenDB).first()
-        if not config:
-            raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
+        # config = db.query(ConfigChickenDB).first()
+        # if not config:
+        #     raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
 
-        slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
-        slot_end = slot_start + timedelta(minutes=15)
+        # slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
+        # slot_end = slot_start + timedelta(minutes=15)
 
-        orders_in_slot = db.query(OrderChickenDB).filter(
-            OrderChickenDB.date >= slot_start,
-            OrderChickenDB.date < slot_end
-        ).all()
+        # orders_in_slot = db.query(OrderChickenDB).filter(
+        #     OrderChickenDB.date >= slot_start,
+        #     OrderChickenDB.date < slot_end
+        # ).all()
 
-        used_chicken = sum(o.chicken for o in orders_in_slot)
-        used_nuggets = sum(o.nuggets for o in orders_in_slot)
-        used_fries = sum(o.fries for o in orders_in_slot)
+        # used_chicken = sum(o.chicken for o in orders_in_slot)
+        # used_nuggets = sum(o.nuggets for o in orders_in_slot)
+        # used_fries = sum(o.fries for o in orders_in_slot)
 
-        print("Konfiguration:", config.fries)
-        print("Bestellungen im Slot:", len(orders_in_slot))
-        print("Verbrauchte Mengen:", used_chicken, used_nuggets, used_fries)
-        print("Neue Bestellung:", order.chicken, order.nuggets, order.fries)
+        # if used_chicken + order.chicken > config.chicken:
+        #     raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
+        # if used_nuggets + order.nuggets > config.nuggets:
+        #     raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
+        # if used_fries + order.fries > config.fries:
+        #     raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
 
-        print("if:", used_chicken + order.chicken)
-        print(">")
-        print("if:", config.chicken)
-
-        if used_chicken + order.chicken > config.chicken:
-            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Hähnchenmenge überschritten für dieses Zeitfenster."})
-        if used_nuggets + order.nuggets > config.nuggets:
-            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Nuggetsmenge überschritten für dieses Zeitfenster."})
-        if used_fries + order.fries > config.fries:
-            raise HTTPException(status_code=400, detail={"success": False,"detail":"Maximale Pommesmenge überschritten für dieses Zeitfenster."})
+        _check_slot_limit(order, db)
 
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
