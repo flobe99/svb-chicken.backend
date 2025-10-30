@@ -512,7 +512,8 @@ def update_product(id: int, updated_product: Product):
             "product": {
                 "id": product.id,
                 "product": product.product,
-                "price": float(product.price)
+                "price": float(product.price),
+                "name": product.name,
             }
         }
     except Exception as e:
