@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Depends, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy import DateTime, asc, cast, create_engine
 from sqlalchemy.orm import sessionmaker
@@ -9,6 +10,7 @@ import os
 from dotenv import load_dotenv
 import json
 
+from auth import create_access_token, get_password_hash, verify_password, verify_token
 from models.ConfigChicken import ConfigChicken
 from models.ConfigChickenDB import ConfigChickenDB
 from models.OrderChicken import OrderChicken
@@ -19,6 +21,7 @@ from decimal import Decimal
 
 from models.Slot import Slot
 from models.SlotDB import SlotDB
+from models.User import Token, User, UserCreate
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -80,6 +83,56 @@ async def broadcast_order_event(event_type: str, order_data: dict):
     })
     for connection in active_connections:
         await connection.send_text(message)
+
+##############################################################
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+@app.post("/register", response_model=User)
+def register_user(user: UserCreate):
+    db = SessionLocal()
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    hashed_password = get_password_hash(user.password)
+    new_user = User(username=user.username, email=user.email, hashed_password=hashed_password)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.post("/token", response_model=Token)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    db = SessionLocal()
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    db = SessionLocal()
+    username = verify_token(token)
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+@app.get("/users/me", response_model=User)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+##############################################################
 
 @app.get("/")
 async def base_path():
