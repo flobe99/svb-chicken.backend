@@ -8,3 +8,4 @@ class ProductDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     product = Column(String)
     price = Column(Numeric(10, 2))
+    name = Column(String)
