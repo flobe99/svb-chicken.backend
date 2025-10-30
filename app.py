@@ -430,7 +430,7 @@ def get_products():
     """
     db = SessionLocal()
     try:
-        products = db.query(ProductDB).all()
+        products = db.query(ProductDB).order_by(ProductDB.id.asc()).all()
         return [product.__dict__ for product in products]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
