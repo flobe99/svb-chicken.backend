@@ -7,3 +7,4 @@ pydantic
 websockets
 passlib[bcrypt]
 python-jose[cryptography]
+PyJWT
