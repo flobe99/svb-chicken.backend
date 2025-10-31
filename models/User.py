@@ -4,6 +4,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
+    verifyed: bool
 
 class User(BaseModel):
     id: int
