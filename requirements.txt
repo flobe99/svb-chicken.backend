@@ -11,3 +11,4 @@ bcrypt
 python-jose[cryptography]
 PyJWT
 python-multipart
+argon2_cffi
