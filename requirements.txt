@@ -6,6 +6,7 @@ python-dotenv
 pydantic
 websockets
 passlib[bcrypt]
+bcrypt
 python-jose[cryptography]
 PyJWT
 python-multipart
