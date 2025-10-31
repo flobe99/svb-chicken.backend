@@ -23,6 +23,7 @@ from decimal import Decimal
 from models.Slot import Slot
 from models.SlotDB import SlotDB
 from models.User import Token, User, UserCreate
+from models.UserDB import UserDB
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -89,11 +90,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 @app.post("/register", response_model=User)
 def register_user(user: UserCreate):
     db = SessionLocal()
-    db_user = db.query(User).filter(User.username == user.username).first()
+    db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
     hashed_password = get_password_hash(user.password)
-    new_user = User(username=user.username, email=user.email, hashed_password=hashed_password)
+    new_user = UserDB(username=user.username, hashed_password=hashed_password)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -121,13 +122,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(UserDB).filter(UserDB.username == username).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
 @app.get("/users/me", response_model=User)
-async def read_users_me(current_user: User = Depends(get_current_user)):
+async def read_users_me(current_user: UserDB = Depends(get_current_user)):
     return current_user
 
 ##############################################################
