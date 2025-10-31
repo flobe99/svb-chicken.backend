@@ -98,7 +98,7 @@ async def base_path():
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-@app.post("/register", response_model=User, tags=["User"])
+@app.post("/user/register", response_model=User, tags=["User"])
 def register_user(user: UserCreate):
     db = SessionLocal()
     db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
@@ -111,7 +111,7 @@ def register_user(user: UserCreate):
     db.refresh(new_user)
     return new_user
 
-@app.post("/token", response_model=Token, tags=["User"])
+@app.post("/user/token", response_model=Token, tags=["User"])
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     db = SessionLocal()
     user = db.query(UserDB).filter(UserDB.username == form_data.username).first()
@@ -132,7 +132,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.post("/change-password", tags=["User"])
+@app.post("/user/change-password", tags=["User"])
 def change_password(username: str, old_password: str, new_password: str):
     db = SessionLocal()
     user = db.query(UserDB).filter(UserDB.username == username).first()
@@ -144,7 +144,7 @@ def change_password(username: str, old_password: str, new_password: str):
     db.commit()
     return {"msg": "Password updated successfully"}
 
-@app.post("/reset-password", tags=["User"])
+@app.post("/user/reset-password", tags=["User"])
 def reset_password(token: str, new_password: str):
     username = verify_token(token)
     if not username:
@@ -159,7 +159,7 @@ def reset_password(token: str, new_password: str):
     db.commit()
     return {"msg": "Password reset successfully"}
 
-async def get_current_user(token: str = Depends(oauth2_scheme), tags=["User"]):
+async def get_current_user(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()
     username = verify_token(token)
     if username is None:
@@ -173,7 +173,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), tags=["User"]):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@app.get("/users/me", response_model=User, tags=["User"])
+@app.get("/user/me", response_model=User, tags=["User"])
 async def read_users_me(current_user: UserDB = Depends(get_current_user)):
     return current_user
 
