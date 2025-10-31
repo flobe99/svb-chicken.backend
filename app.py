@@ -84,10 +84,21 @@ async def broadcast_order_event(event_type: str, order_data: dict):
         await connection.send_text(message)
 
 ##############################################################
+@app.get("/")
+async def base_path():
+    """
+    Root endpoint to verify that the API is running.
+
+    Returns:
+        dict: A success message.
+    """
+    return {"success": True}
+
+##############################################################
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-@app.post("/register", response_model=User)
+@app.post("/register", response_model=User, tags=["User"])
 def register_user(user: UserCreate):
     db = SessionLocal()
     db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
@@ -100,7 +111,7 @@ def register_user(user: UserCreate):
     db.refresh(new_user)
     return new_user
 
-@app.post("/token", response_model=Token)
+@app.post("/token", response_model=Token, tags=["User"])
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     db = SessionLocal()
     user = db.query(UserDB).filter(UserDB.username == form_data.username).first()
@@ -121,7 +132,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.post("/change-password")
+@app.post("/change-password", tags=["User"])
 def change_password(username: str, old_password: str, new_password: str):
     db = SessionLocal()
     user = db.query(UserDB).filter(UserDB.username == username).first()
@@ -133,7 +144,7 @@ def change_password(username: str, old_password: str, new_password: str):
     db.commit()
     return {"msg": "Password updated successfully"}
 
-@app.post("/reset-password")
+@app.post("/reset-password", tags=["User"])
 def reset_password(token: str, new_password: str):
     username = verify_token(token)
     if not username:
@@ -148,7 +159,7 @@ def reset_password(token: str, new_password: str):
     db.commit()
     return {"msg": "Password reset successfully"}
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme), tags=["User"]):
     db = SessionLocal()
     username = verify_token(token)
     if username is None:
@@ -162,21 +173,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@app.get("/users/me", response_model=User)
+@app.get("/users/me", response_model=User, tags=["User"])
 async def read_users_me(current_user: UserDB = Depends(get_current_user)):
     return current_user
 
 ##############################################################
-
-@app.get("/")
-async def base_path():
-    """
-    Root endpoint to verify that the API is running.
-
-    Returns:
-        dict: A success message.
-    """
-    return {"success": True}
 
 def _check_slot_limit(order: OrderChicken, db):
     errors = []
@@ -237,7 +238,7 @@ def _check_slot_limit(order: OrderChicken, db):
     if errors:
         raise HTTPException(status_code=400, detail={"success": False, "errors": errors})
 
-@app.post("/order")
+@app.post("/order", tags=["Order"])
 async def create_order(order: OrderChicken):
     """
     Creates a new order and calculates its total price.
@@ -286,7 +287,7 @@ async def create_order(order: OrderChicken):
     finally:
         db.close()
 
-@app.get("/orders")
+@app.get("/orders", tags=["Order"])
 def get_orders(status: str = Query(None)):
     """
     Retrieves all orders, optionally filtered by status.
@@ -310,7 +311,7 @@ def get_orders(status: str = Query(None)):
     finally:
         db.close()
 
-@app.post("/validate-order")
+@app.post("/validate-order", tags=["Order"])
 def validate_order(order: OrderChicken):
     db = SessionLocal()
     try:        
@@ -325,7 +326,7 @@ def validate_order(order: OrderChicken):
     finally:
         db.close()
 
-@app.get("/orders/summary")
+@app.get("/orders/summary", tags=["Order"])
 def get_order_summary(date: str = Query(...), interval: str = Query(...)):
     """
     Liefert die Summen für Hähnchen, Nuggets und Pommes für ein bestimmtes Datum und Zeitfenster.
@@ -396,7 +397,7 @@ def get_order_summary(date: str = Query(...), interval: str = Query(...)):
     finally:
         db.close()
 
-@app.put("/order/{id}")
+@app.put("/order/{id}", tags=["Order"])
 async def update_order(id: int, updated_order: OrderChicken):
     """
     Updates an existing order and recalculates its price.
@@ -453,7 +454,7 @@ async def update_order(id: int, updated_order: OrderChicken):
         db.close()
 
 # Bestellung löschen
-@app.delete("/order/{id}")
+@app.delete("/order/{id}", tags=["Order"])
 def delete_order(id: str):
     """
     Deletes an order by its ID.
@@ -479,7 +480,7 @@ def delete_order(id: str):
     finally:
         db.close()
 
-@app.post("/order/price")
+@app.post("/order/price", tags=["Order"])
 def calculate_order_price(order: OrderChicken):
     """
     Calculates the total price of an order without saving it.
@@ -509,7 +510,7 @@ def calculate_order_price(order: OrderChicken):
     finally:
         db.close()
 
-@app.get("/products")
+@app.get("/products", tags=["Products"])
 def get_products():
     """
     Retrieves all available products.
@@ -526,7 +527,7 @@ def get_products():
     finally:
         db.close()
 
-@app.get("/product/{id}")
+@app.get("/product/{id}", tags=["Products"])
 def get_product(id: int):
     """
     Retrieves a single product by its ID.
@@ -548,7 +549,7 @@ def get_product(id: int):
     finally:
         db.close()
 
-@app.post("/product")
+@app.post("/product", tags=["Products"])
 def create_product(product: Product):
     """
     Creates a new product entry.
@@ -572,7 +573,7 @@ def create_product(product: Product):
     finally:
         db.close()
 
-@app.put("/product/{id}")
+@app.put("/product/{id}", tags=["Products"])
 def update_product(id: int, updated_product: Product):
     """
     Updates an existing product.
@@ -614,7 +615,7 @@ def update_product(id: int, updated_product: Product):
     finally:
         db.close()
 
-@app.delete("/product/{id}")
+@app.delete("/product/{id}", tags=["Products"])
 def delete_product(id: int):
     """
     Deletes a product by its ID.
@@ -640,7 +641,7 @@ def delete_product(id: int):
     finally:
         db.close()
 
-@app.get("/config/{id}")
+@app.get("/config/{id}", tags=["Config"])
 def get_config(id: int):
     db = SessionLocal()
     try:
@@ -653,7 +654,7 @@ def get_config(id: int):
     finally:
         db.close()
 
-@app.put("/config/{id}")
+@app.put("/config/{id}", tags=["Config"])
 def update_config(id: int, config: ConfigChicken = None):
     db = SessionLocal()
     try:
@@ -673,7 +674,7 @@ def update_config(id: int, config: ConfigChicken = None):
     finally:
         db.close()
 
-@app.delete("/config/{id}")
+@app.delete("/config/{id}", tags=["Config"])
 def delete_config(id: int):
     db = SessionLocal()
     try:
@@ -690,7 +691,7 @@ def delete_config(id: int):
     finally:
         db.close()
 
-@app.get("/slots")
+@app.get("/slots", tags=["Slot"])
 def get_all_slots():
     db = SessionLocal()
     try:
@@ -701,7 +702,7 @@ def get_all_slots():
     finally:
         db.close()
 
-@app.get("/slots/{id}")
+@app.get("/slots/{id}", tags=["Slot"])
 def get_slot(id: int):
     db = SessionLocal()
     try:
@@ -714,7 +715,7 @@ def get_slot(id: int):
     finally:
         db.close()
 
-@app.post("/slots")
+@app.post("/slots", tags=["Slot"])
 def create_slot(slot: Slot):
     db = SessionLocal()
     try:
@@ -729,7 +730,7 @@ def create_slot(slot: Slot):
     finally:
         db.close()
 
-@app.put("/slots/{id}")
+@app.put("/slots/{id}", tags=["Slot"])
 def update_slot(id: int, slot: Slot):
     db = SessionLocal()
     try:
@@ -749,7 +750,7 @@ def update_slot(id: int, slot: Slot):
     finally:
         db.close()
 
-@app.delete("/slots/{id}")
+@app.delete("/slots/{id}", tags=["Slot"])
 def delete_slot(id: int):
     db = SessionLocal()
     try:
