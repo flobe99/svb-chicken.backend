@@ -104,14 +104,49 @@ def register_user(user: UserCreate):
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     db = SessionLocal()
     user = db.query(UserDB).filter(UserDB.username == form_data.username).first()
+    
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    if not user.verifyed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account not verified",
+        )
+
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/change-password")
+def change_password(username: str, old_password: str, new_password: str):
+    db = SessionLocal()
+    user = db.query(UserDB).filter(UserDB.username == username).first()
+    if not user or not verify_password(old_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+    if len(new_password.encode('utf-8')) > 72:
+        raise HTTPException(status_code=400, detail="Password must not exceed 72 bytes.")
+    user.hashed_password = get_password_hash(new_password[:72])
+    db.commit()
+    return {"msg": "Password updated successfully"}
+
+@app.post("/reset-password")
+def reset_password(token: str, new_password: str):
+    username = verify_token(token)
+    if not username:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    db = SessionLocal()
+    user = db.query(UserDB).filter(UserDB.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if len(new_password.encode('utf-8')) > 72:
+        raise HTTPException(status_code=400, detail="Password must not exceed 72 bytes.")
+    user.hashed_password = get_password_hash(new_password[:72])
+    db.commit()
+    return {"msg": "Password reset successfully"}
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     db = SessionLocal()

@@ -9,6 +9,7 @@ class User(BaseModel):
     id: int
     username: str
     email: EmailStr
+    verifyed: bool
 
     class Config:
         orm_mode = True
