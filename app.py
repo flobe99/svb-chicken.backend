@@ -94,7 +94,7 @@ def register_user(user: UserCreate):
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
     hashed_password = get_password_hash(user.password)
-    new_user = UserDB(username=user.username, hashed_password=hashed_password)
+    new_user = UserDB(username=user.username, email=user.email, hashed_password=hashed_password)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -103,7 +103,7 @@ def register_user(user: UserCreate):
 @app.post("/token", response_model=Token)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     db = SessionLocal()
-    user = db.query(User).filter(User.username == form_data.username).first()
+    user = db.query(UserDB).filter(UserDB.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

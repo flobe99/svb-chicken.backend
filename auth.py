@@ -16,9 +16,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password: str) -> str:
-    password_bytes = password.encode("utf-8")[:72]
-    return pwd_context.hash(password_bytes.decode("utf-8", errors="ignore"))
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 def create_access_token(data: dict):
     to_encode = data.copy()
