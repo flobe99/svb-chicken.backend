@@ -96,7 +96,7 @@ async def base_path():
 
 ##############################################################
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user/token")
 
 @app.post("/user/register", response_model=User, tags=["User"])
 def register_user(user: UserCreate):
