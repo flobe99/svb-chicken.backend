@@ -181,11 +181,17 @@ async def read_users_me(current_user: UserDB = Depends(get_current_user)):
 
 def _check_slot_limit(order: OrderChicken, db):
     errors = []
-
+    print(order.date)
     matching_slot = db.query(SlotDB).filter(
         SlotDB.range_start <= order.date,
         SlotDB.range_end >= order.date
     ).first()
+
+    print(matching_slot)
+    print(matching_slot.id)
+    print(matching_slot.date)
+    print(matching_slot.range_start)
+    print(matching_slot.range_end)
 
     if not matching_slot:
         errors.append({
@@ -311,6 +317,30 @@ def get_orders(status: str = Query(None)):
     finally:
         db.close()
 
+@app.get("/order/{id}", tags=["Order"])
+def get_order(id: str):
+    """
+    Deletes an order by its ID.
+
+    Args:
+        id (str): The ID of the order to delete.
+
+    Returns:
+        dict: A success flag if deletion was successful.
+    """
+    db = SessionLocal()
+    try:
+        order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        return order
+    except Exception as e:
+        print("Error in /orders:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
 @app.post("/validate-order", tags=["Order"])
 def validate_order(order: OrderChicken):
     db = SessionLocal()
@@ -418,7 +448,7 @@ async def update_order(id: int, updated_order: OrderChicken):
         if updated_order.checked_in_at == "":
             order.checked_in_at = None
 
-        _check_slot_limit(order, db)
+        
 
         products = db.query(ProductDB).all()
         price_map = {p.product.lower(): float(p.price) for p in products}
@@ -432,6 +462,8 @@ async def update_order(id: int, updated_order: OrderChicken):
 
         for key, value in updated_order.dict(exclude_unset=True).items():
             setattr(order, key, value)
+
+        _check_slot_limit(order, db)
 
         order.price = total_price
 
