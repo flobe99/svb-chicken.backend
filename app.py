@@ -187,11 +187,6 @@ def _check_slot_limit(order: OrderChicken, db):
         SlotDB.range_end >= order.date
     ).first()
 
-    print(matching_slot)
-    print(matching_slot.id)
-    print(matching_slot.date)
-    print(matching_slot.range_start)
-    print(matching_slot.range_end)
 
     if not matching_slot:
         errors.append({
