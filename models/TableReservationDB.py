@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime
 from models.OrderChickenDB import Base
 
 class TableReservationDB(Base):
-    __tablename__ = "table_reservations"
+    __tablename__ = "table_reservation"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     table_id = Column(Integer)

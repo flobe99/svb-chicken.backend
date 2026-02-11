@@ -9,25 +9,27 @@ from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
 import json
+# from decimal import Decimal
 
 from auth import create_access_token, get_password_hash, verify_password, verify_token
-from models.ConfigChicken import ConfigChicken
-from models.ConfigChickenDB import ConfigChickenDB
-from models.LimitCode import LimitCode
-from models.OrderChicken import OrderChicken
-from models.OrderChickenDB import Base, OrderChickenDB
-from models.Product import Product
-from models.ProductDB import Base, ProductDB
-from decimal import Decimal
+from models import *
+# from models.ConfigChicken import ConfigChicken
+# from models.ConfigChickenDB import ConfigChickenDB
+# from models.LimitCode import LimitCode
+# from models.OrderChicken import OrderChicken
+# from models.OrderChickenDB import Base, OrderChickenDB
+# from models.Product import Product
+# from models.ProductDB import Base, ProductDB
 
-from models.Slot import Slot
-from models.SlotDB import SlotDB
-from models.Table import Table
-from models.TableDB import TableDB
-from models.TableReservation import TableReservation
-from models.TableReservationDB import TableReservationDB
-from models.User import Token, User, UserCreate
-from models.UserDB import UserDB
+
+# from models.Slot import Slot
+# from models.SlotDB import SlotDB
+# from models.Table import Table
+# from models.TableDB import TableDB
+# from models.TableReservation import TableReservation
+# from models.TableReservationDB import TableReservationDB
+# from models.User import Token, User, UserCreate
+# from models.UserDB import UserDB
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
