@@ -22,6 +22,10 @@ from decimal import Decimal
 
 from models.Slot import Slot
 from models.SlotDB import SlotDB
+from models.Table import Table
+from models.TableDB import TableDB
+from models.TableReservation import TableReservation
+from models.TableReservationDB import TableReservationDB
 from models.User import Token, User, UserCreate
 from models.UserDB import UserDB
 
@@ -788,6 +792,179 @@ def delete_slot(id: int):
         db.delete(db_slot)
         db.commit()
         return {"success": True, "message": f"Slot with ID {id} deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+# Table endpoints
+@app.get("/tables", tags=["Table"])
+def get_tables():
+    db = SessionLocal()
+    try:
+        tables = db.query(TableDB).order_by(TableDB.id.asc()).all()
+        return [table.__dict__ for table in tables]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.get("/tables/{id}", tags=["Table"])
+def get_table(id: int):
+    db = SessionLocal()
+    try:
+        table = db.query(TableDB).filter(TableDB.id == id).first()
+        if not table:
+            raise HTTPException(status_code=404, detail="Table not found")
+        return table.__dict__
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/tables", tags=["Table"])
+def create_table(table: Table):
+    db = SessionLocal()
+    try:
+        db_table = TableDB(**{k: v for k, v in table.dict().items() if k != "id"})
+        db.add(db_table)
+        db.commit()
+        db.refresh(db_table)
+        return db_table.__dict__
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.put("/tables/{id}", tags=["Table"])
+def update_table(id: int, updated_table: Table):
+    db = SessionLocal()
+    try:
+        db_table = db.query(TableDB).filter(TableDB.id == id).first()
+        if not db_table:
+            raise HTTPException(status_code=404, detail="Table not found")
+
+        for field, value in updated_table.dict(exclude_unset=True).items():
+            setattr(db_table, field, value)
+
+        db.commit()
+        db.refresh(db_table)
+        return {"success": True, "table": db_table.__dict__}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/tables/{id}", tags=["Table"])
+def delete_table(id: int):
+    db = SessionLocal()
+    try:
+        db_table = db.query(TableDB).filter(TableDB.id == id).first()
+        if not db_table:
+            raise HTTPException(status_code=404, detail="Table not found")
+
+        db.delete(db_table)
+        db.commit()
+        return {"success": True}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+# TableReservation endpoints
+@app.get("/table-reservations", tags=["TableReservation"])
+def get_table_reservations():
+    db = SessionLocal()
+    try:
+        reservations = db.query(TableReservationDB).order_by(TableReservationDB.start.asc()).all()
+        return [r.__dict__ for r in reservations]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.get("/table-reservations/{id}", tags=["TableReservation"])
+def get_table_reservation(id: int):
+    db = SessionLocal()
+    try:
+        reservation = db.query(TableReservationDB).filter(TableReservationDB.id == id).first()
+        if not reservation:
+            raise HTTPException(status_code=404, detail="Reservation not found")
+        return reservation.__dict__
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/table-reservations", tags=["TableReservation"])
+def create_table_reservation(reservation: TableReservation):
+    db = SessionLocal()
+    try:
+        table = db.query(TableDB).filter(TableDB.id == reservation.table_id).first()
+        if not table:
+            raise HTTPException(status_code=400, detail="Table not found")
+
+        db_res = TableReservationDB(**{k: v for k, v in reservation.dict().items() if k != "id"})
+        db.add(db_res)
+        db.commit()
+        db.refresh(db_res)
+        return {"success": True, "reservation": db_res.__dict__}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.put("/table-reservations/{id}", tags=["TableReservation"])
+def update_table_reservation(id: int, updated_reservation: TableReservation):
+    db = SessionLocal()
+    try:
+        res = db.query(TableReservationDB).filter(TableReservationDB.id == id).first()
+        if not res:
+            raise HTTPException(status_code=404, detail="Reservation not found")
+
+        if hasattr(updated_reservation, "table_id") and updated_reservation.table_id is not None:
+            table = db.query(TableDB).filter(TableDB.id == updated_reservation.table_id).first()
+            if not table:
+                raise HTTPException(status_code=400, detail="Table not found")
+
+        for field, value in updated_reservation.dict(exclude_unset=True).items():
+            setattr(res, field, value)
+
+        db.commit()
+        db.refresh(res)
+        return {"success": True, "reservation": res.__dict__}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/table-reservations/{id}", tags=["TableReservation"])
+def delete_table_reservation(id: int):
+    db = SessionLocal()
+    try:
+        res = db.query(TableReservationDB).filter(TableReservationDB.id == id).first()
+        if not res:
+            raise HTTPException(status_code=404, detail="Reservation not found")
+
+        db.delete(res)
+        db.commit()
+        return {"success": True}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
