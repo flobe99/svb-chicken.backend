@@ -889,7 +889,21 @@ def get_table_reservations():
     db = SessionLocal()
     try:
         reservations = db.query(TableReservationDB).order_by(TableReservationDB.start.asc()).all()
-        return [r.__dict__ for r in reservations]
+        result = []
+        for r in reservations:
+            result.append({
+                "id": r.id,
+                "customer_name": r.customer_name,
+                "seats": r.seats,
+                "start": r.start,
+                "end": r.end,
+                "table": {
+                    "id": r.table.id,
+                    "name": r.table.name,
+                    "seats": r.table.seats
+                }
+            })
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -903,7 +917,18 @@ def get_table_reservation(id: int):
         reservation = db.query(TableReservationDB).filter(TableReservationDB.id == id).first()
         if not reservation:
             raise HTTPException(status_code=404, detail="Reservation not found")
-        return reservation.__dict__
+        return {
+            "id": reservation.id,
+            "customer_name": reservation.customer_name,
+            "seats": reservation.seats,
+            "start": reservation.start,
+            "end": reservation.end,
+            "table": {
+                "id": reservation.table.id,
+                "name": reservation.table.name,
+                "seats": reservation.table.seats
+            }
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -918,11 +943,25 @@ def create_table_reservation(reservation: TableReservation):
         if not table:
             raise HTTPException(status_code=400, detail="Table not found")
 
-        db_res = TableReservationDB(**{k: v for k, v in reservation.dict().items() if k != "id"})
+        db_res = TableReservationDB(**reservation.dict())
         db.add(db_res)
         db.commit()
         db.refresh(db_res)
-        return {"success": True, "reservation": db_res.__dict__}
+        return {
+            "success": True,
+            "reservation": {
+                "id": db_res.id,
+                "customer_name": db_res.customer_name,
+                "seats": db_res.seats,
+                "start": db_res.start,
+                "end": db_res.end,
+                "table": {
+                    "id": db_res.table.id,
+                    "name": db_res.table.name,
+                    "seats": db_res.table.seats
+                }
+            }
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -948,7 +987,21 @@ def update_table_reservation(id: int, updated_reservation: TableReservation):
 
         db.commit()
         db.refresh(res)
-        return {"success": True, "reservation": res.__dict__}
+        return {
+            "success": True,
+            "reservation": {
+                "id": res.id,
+                "customer_name": res.customer_name,
+                "seats": res.seats,
+                "start": res.start,
+                "end": res.end,
+                "table": {
+                    "id": res.table.id,
+                    "name": res.table.name,
+                    "seats": res.table.seats
+                }
+            }
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
