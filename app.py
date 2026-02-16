@@ -802,6 +802,43 @@ def delete_slot(id: int):
 
 
 # Table endpoints
+@app.get("/tables-with-reservations", tags=["Table"])
+def get_tables_with_reservations():
+    """
+    Retrieves all tables with their reservations.
+
+    Returns:
+        list: A list of tables, each containing an array of reservations.
+    """
+    db = SessionLocal()
+    try:
+        tables = db.query(TableDB).order_by(TableDB.id.asc()).all()
+        result = []
+        for table in tables:
+            reservations = db.query(TableReservationDB).filter(TableReservationDB.table_id == table.id).order_by(TableReservationDB.start.asc()).all()
+            table_data = {
+                "id": table.id,
+                "name": table.name,
+                "seats": table.seats,
+                "reservations": [
+                    {
+                        "id": r.id,
+                        "customer_name": r.customer_name,
+                        "seats": r.seats,
+                        "start": r.start,
+                        "end": r.end
+                    }
+                    for r in reservations
+                ]
+            }
+            result.append(table_data)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
 @app.get("/tables", tags=["Table"])
 def get_tables():
     db = SessionLocal()
