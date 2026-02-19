@@ -150,7 +150,7 @@ def test_reset_password(monkeypatch):
     # verify_token aus auth importieren und mocken
     from auth import verify_token
 
-    monkeypatch.setattr("auth.verify_token", lambda token: "resetuser")
+    monkeypatch.setattr("routes.user_route.verify_token", lambda token: "resetuser")
 
     response = client.post(
         "/user/reset-password",
