@@ -1,15 +1,10 @@
-from fastapi import Depends, HTTPException, Query, APIRouter, status
-from sqlalchemy.orm import Session
-from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from datetime import UTC, datetime, timedelta
-from sqlalchemy import DateTime, cast
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
 from auth import create_access_token, get_password_hash, verify_password, verify_token
-from database import SessionLocal, get_db
-# from app import SessionLocal
-from helper import check_slot_limit
+from database import get_db
 from models import *
-from routes.websocket import broadcast_order_event
 
 user_router = APIRouter(
     # prefix="/users",

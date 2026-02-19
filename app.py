@@ -1,17 +1,8 @@
-# from datetime import UTC, datetime, timedelta
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Depends, status
-from fastapi.encoders import jsonable_encoder
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel
-from sqlalchemy import DateTime, StaticPool, asc, cast, create_engine
-from sqlalchemy.orm import Session, sessionmaker
-import os
-from dotenv import load_dotenv
-import json
 
-from auth import create_access_token, get_password_hash, verify_password, verify_token
-from database import get_db
+from dotenv import load_dotenv
+
 from models import *
 
 load_dotenv()
@@ -28,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-##############################################################
 @app.get("/")
 async def base_path():
     """
@@ -39,7 +29,6 @@ async def base_path():
     """
     return {"success": True}
 
-##############################################################
 app.include_router(websocket_router)
 app.include_router(user_router)
 app.include_router(order_router)

@@ -1,13 +1,9 @@
-from fastapi import Depends, HTTPException, Query, APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from fastapi.encoders import jsonable_encoder
-from datetime import UTC, datetime, timedelta
-from sqlalchemy import DateTime, cast
-from database import SessionLocal, get_db
-# from app import SessionLocal
-from helper import check_slot_limit
+
+from database import get_db
 from models import *
-from routes.websocket import broadcast_order_event
+
 
 config_router = APIRouter(
     # prefix="/users",
