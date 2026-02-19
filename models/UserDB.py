@@ -8,4 +8,4 @@ class UserDB(Base):
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    verifyed = Column(Boolean, unique=True, index=True)
+    verifyed = Column(Boolean, default=False)

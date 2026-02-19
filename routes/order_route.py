@@ -214,7 +214,6 @@ async def update_order(id: int, updated_order: OrderChicken, db: Session = Depen
         
         if updated_order.checked_in_at == "":
             order.checked_in_at = None
-
         
 
         products = db.query(ProductDB).all()

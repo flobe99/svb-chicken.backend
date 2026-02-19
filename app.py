@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+# from datetime import UTC, datetime, timedelta
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Depends, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,20 +15,7 @@ from database import get_db
 from models import *
 
 load_dotenv()
-# DATABASE_URL = os.getenv("DATABASE_URL")
-# engine=None
-# if os.getenv("TESTING") == "1":
-#     print("TESTING")
-#     engine = create_engine(
-#         DATABASE_URL,
-#         connect_args={"check_same_thread": False},
-#         poolclass=StaticPool
-#     )
-# else:
-#     print("PROD")
-#     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
-# SessionLocal = sessionmaker(bind=engine)
 from routes import *
 app = FastAPI()
 
@@ -40,8 +27,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Base.metadata.create_all(bind=engine)
 
 ##############################################################
 @app.get("/")
@@ -56,212 +41,9 @@ async def base_path():
 
 ##############################################################
 app.include_router(websocket_router)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user/token")
-
-@app.post("/user/register", response_model=User, tags=["User"])
-def register_user(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
-    hashed_password = get_password_hash(user.password)
-    new_user = UserDB(username=user.username, email=user.email, hashed_password=hashed_password, verifyed=False)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
-
-@app.post("/user/token", response_model=Token, tags=["User"])
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(UserDB).filter(UserDB.username == form_data.username).first()
-    
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    if not user.verifyed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account not verified",
-        )
-
-    access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-@app.post("/user/change-password", tags=["User"])
-def change_password(username: str, old_password: str, new_password: str, db: Session = Depends(get_db)):
-    user = db.query(UserDB).filter(UserDB.username == username).first()
-    if not user or not verify_password(old_password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    if len(new_password.encode('utf-8')) > 72:
-        raise HTTPException(status_code=400, detail="Password must not exceed 72 bytes.")
-    user.hashed_password = get_password_hash(new_password[:72])
-    db.commit()
-    return {"msg": "Password updated successfully"}
-
-@app.post("/user/reset-password", tags=["User"])
-def reset_password(token: str, new_password: str, db: Session = Depends(get_db)):
-    username = verify_token(token)
-    if not username:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
-    user = db.query(UserDB).filter(UserDB.username == username).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if len(new_password.encode('utf-8')) > 72:
-        raise HTTPException(status_code=400, detail="Password must not exceed 72 bytes.")
-    user.hashed_password = get_password_hash(new_password[:72])
-    db.commit()
-    return {"msg": "Password reset successfully"}
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    username = verify_token(token)
-    if username is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    user = db.query(UserDB).filter(UserDB.username == username).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
-
-@app.get("/user/me", response_model=User, tags=["User"])
-async def read_users_me(current_user: UserDB = Depends(get_current_user)):
-    return current_user
-
-##############################################################
-
+app.include_router(user_router)
 app.include_router(order_router)
-
-@app.get("/products", tags=["Products"])
-def get_products(db: Session = Depends(get_db)):
-    """
-    Retrieves all available products.
-
-    Returns:
-        list: A list of product dictionaries.
-    """
-    try:
-        products = db.query(ProductDB).order_by(ProductDB.id.asc()).all()
-        return [product.__dict__ for product in products]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.get("/product/{id}", tags=["Products"])
-def get_product(id: int, db: Session = Depends(get_db)):
-    """
-    Retrieves a single product by its ID.
-
-    Args:
-        id (int): The ID of the product to retrieve.
-
-    Returns:
-        dict: The product data.
-    """
-    try:
-        product = db.query(ProductDB).filter(ProductDB.id == id).first()
-        if not product:
-            raise HTTPException(status_code=404, detail="Product not found")
-        return product.__dict__
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.post("/product", tags=["Products"])
-def create_product(product: Product, db: Session = Depends(get_db)):
-    """
-    Creates a new product entry.
-
-    Args:
-        product (Product): The product data to store.
-
-    Returns:
-        dict: The created product data.
-    """
-    db_product = ProductDB(**{k: v for k, v in product.dict().items() if k != "id"})
-    try:
-        db.add(db_product)
-        db.commit()
-        db.refresh(db_product)
-        return db_product.__dict__
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.put("/product/{id}", tags=["Products"])
-def update_product(id: int, updated_product: Product, db: Session = Depends(get_db)):
-    """
-    Updates an existing product.
-
-    Args:
-        id (int): The ID of the product to update.
-        updated_product (Product): The new product data.
-
-    Returns:
-        dict: A success flag and the updated product data.
-    """
-    try:
-        product = db.query(ProductDB).filter(ProductDB.id == id).first()
-        if not product:
-            raise HTTPException(status_code=404, detail="Product not found")
-
-        product.product = updated_product.product
-        product.price = updated_product.price
-
-        db.commit()
-        db.refresh(product)
-
-        return {
-            "success": True,
-            "product": {
-                "id": product.id,
-                "product": product.product,
-                "price": float(product.price),
-                "name": product.name,
-            }
-        }
-    except Exception as e:
-        db.rollback()
-        return {
-            "success": False,
-            "error": str(e)
-        }
-    finally:
-        db.close()
-
-@app.delete("/product/{id}", tags=["Products"])
-def delete_product(id: int, db: Session = Depends(get_db)):
-    """
-    Deletes a product by its ID.
-
-    Args:
-        id (int): The ID of the product to delete.
-
-    Returns:
-        dict: A success flag if deletion was successful.
-    """
-    
-    try:
-        product = db.query(ProductDB).filter(ProductDB.id == id).first()
-        if not product:
-            raise HTTPException(status_code=404, detail="Product not found")
-
-        db.delete(product)
-        db.commit()
-        return {"success": True}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+app.include_router(products_router)
 
 @app.get("/config/{id}", tags=["Config"])
 def get_config(id: int, db: Session = Depends(get_db)):

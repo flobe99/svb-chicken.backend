@@ -1,9 +1,6 @@
 import os
-from fastapi import Depends
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
 # --- 1. ENV setzen ---
 os.environ["TESTING"] = "1"
@@ -12,7 +9,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 # --- 2. App importieren ---
 from app import app
 from database import SessionLocal, get_db
-from models import Base, OrderChickenDB, ProductDB
+from models import *
 
 # --- 3. Tabellen erstellen ---
 # Base.metadata.create_all(bind=engine)
@@ -36,7 +33,7 @@ def mock_check_slot_limit(monkeypatch):
 def setup_products():
     db = SessionLocal()
     try:
-        db.query(ProductDB).delete()   # optional: Tabelle leeren
+        db.query(ProductDB).delete()
         db.add(ProductDB(product="chicken", price=5.0))
         db.add(ProductDB(product="nuggets", price=3.0))
         db.add(ProductDB(product="fries", price=2.0))
