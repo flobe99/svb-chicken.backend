@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from models import Table
 
 class TableReservation(BaseModel):
@@ -9,8 +9,7 @@ class TableReservation(BaseModel):
     end: datetime
     table_id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TableReservationResponse(BaseModel):
     id: int
@@ -20,5 +19,4 @@ class TableReservationResponse(BaseModel):
     end: datetime
     table: Table
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

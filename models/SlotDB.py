@@ -1,7 +1,5 @@
 from sqlalchemy import Column, Integer, Text, Date, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from models.Base import Base
 
 class SlotDB(Base):
     __tablename__ = "slots"

@@ -1,7 +1,6 @@
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Integer, DateTime, Numeric
 
-Base = declarative_base()
+from models.Base import Base
 
 class ConfigChickenDB(Base):
     __tablename__ = "config"

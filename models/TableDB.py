@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
-from models.OrderChickenDB import Base
+from models.Base import Base
 
 class TableDB(Base):
     __tablename__ = "table"

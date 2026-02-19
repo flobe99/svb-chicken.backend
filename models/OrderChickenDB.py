@@ -1,7 +1,5 @@
-from sqlalchemy.ext.declarative import declarative_base
+from models.Base import Base
 from sqlalchemy import Column, String, Integer, DateTime, Numeric
-
-Base = declarative_base()
 
 class OrderChickenDB(Base):
     __tablename__ = "orders"

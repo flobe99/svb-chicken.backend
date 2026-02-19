@@ -1,8 +1,9 @@
+from .Base import Base
 from .ConfigChicken import ConfigChicken
 from .ConfigChickenDB import ConfigChickenDB
 from .LimitCode import LimitCode
 from .OrderChicken import OrderChicken
-from .OrderChickenDB import Base, OrderChickenDB
+from .OrderChickenDB import OrderChickenDB
 from .Product import Product
 from .ProductDB import ProductDB
 from .Slot import Slot

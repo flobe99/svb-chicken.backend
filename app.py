@@ -1,42 +1,35 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Depends, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from sqlalchemy import DateTime, asc, cast, create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import DateTime, StaticPool, asc, cast, create_engine
+from sqlalchemy.orm import Session, sessionmaker
 import os
 from dotenv import load_dotenv
 import json
-# from decimal import Decimal
 
 from auth import create_access_token, get_password_hash, verify_password, verify_token
+from database import get_db
 from models import *
-# from models.ConfigChicken import ConfigChicken
-# from models.ConfigChickenDB import ConfigChickenDB
-# from models.LimitCode import LimitCode
-# from models.OrderChicken import OrderChicken
-# from models.OrderChickenDB import Base, OrderChickenDB
-# from models.Product import Product
-# from models.ProductDB import Base, ProductDB
-
-
-# from models.Slot import Slot
-# from models.SlotDB import SlotDB
-# from models.Table import Table
-# from models.TableDB import TableDB
-# from models.TableReservation import TableReservation
-# from models.TableReservationDB import TableReservationDB
-# from models.User import Token, User, UserCreate
-# from models.UserDB import UserDB
 
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL")
+# DATABASE_URL = os.getenv("DATABASE_URL")
+# engine=None
+# if os.getenv("TESTING") == "1":
+#     print("TESTING")
+#     engine = create_engine(
+#         DATABASE_URL,
+#         connect_args={"check_same_thread": False},
+#         poolclass=StaticPool
+#     )
+# else:
+#     print("PROD")
+#     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine)
-
+# SessionLocal = sessionmaker(bind=engine)
+from routes import *
 app = FastAPI()
 
 # CORS
@@ -48,46 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Base.metadata.create_all(bind=engine)
-
-# WebSocket-Verbindungen
-active_connections: list[WebSocket] = []
-
-@app.websocket("/ws/orders")
-async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for receiving order events.
-
-    Accepts a WebSocket connection and keeps it open until the client disconnects.
-    Messages received from the client are ignored in this implementation.
-
-    Args:
-        websocket (WebSocket): The incoming WebSocket connection.
-    """
-    await websocket.accept()
-    active_connections.append(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        active_connections.remove(websocket)
-
-async def broadcast_order_event(event_type: str, order_data: dict):
-    """
-    Broadcasts an order event to all active WebSocket connections.
-
-    Sends a JSON-formatted message containing the event type and order data.
-
-    Args:
-        event_type (str): The type of event (e.g., "created", "updated").
-        order_data (dict): The order data to be sent to clients.
-    """
-    message = json.dumps({
-        "event": event_type,
-        "data": order_data
-    })
-    for connection in active_connections:
-        await connection.send_text(message)
+# Base.metadata.create_all(bind=engine)
 
 ##############################################################
 @app.get("/")
@@ -101,12 +55,11 @@ async def base_path():
     return {"success": True}
 
 ##############################################################
-
+app.include_router(websocket_router)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user/token")
 
 @app.post("/user/register", response_model=User, tags=["User"])
-def register_user(user: UserCreate):
-    db = SessionLocal()
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
@@ -118,8 +71,7 @@ def register_user(user: UserCreate):
     return new_user
 
 @app.post("/user/token", response_model=Token, tags=["User"])
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    db = SessionLocal()
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.username == form_data.username).first()
     
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -139,8 +91,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/user/change-password", tags=["User"])
-def change_password(username: str, old_password: str, new_password: str):
-    db = SessionLocal()
+def change_password(username: str, old_password: str, new_password: str, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.username == username).first()
     if not user or not verify_password(old_password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
@@ -151,11 +102,10 @@ def change_password(username: str, old_password: str, new_password: str):
     return {"msg": "Password updated successfully"}
 
 @app.post("/user/reset-password", tags=["User"])
-def reset_password(token: str, new_password: str):
+def reset_password(token: str, new_password: str, db: Session = Depends(get_db)):
     username = verify_token(token)
     if not username:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    db = SessionLocal()
     user = db.query(UserDB).filter(UserDB.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -165,8 +115,7 @@ def reset_password(token: str, new_password: str):
     db.commit()
     return {"msg": "Password reset successfully"}
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    db = SessionLocal()
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     username = verify_token(token)
     if username is None:
         raise HTTPException(
@@ -185,373 +134,16 @@ async def read_users_me(current_user: UserDB = Depends(get_current_user)):
 
 ##############################################################
 
-def _check_slot_limit(order: OrderChicken, db):
-    errors = []
-    print(order.date)
-    matching_slot = db.query(SlotDB).filter(
-        SlotDB.range_start <= order.date,
-        SlotDB.range_end >= order.date
-    ).first()
-
-
-    if not matching_slot:
-        errors.append({
-            "code": LimitCode.SLOT,
-            "detail": "Bestellzeit liegt außerhalb der verfügbaren Slots"
-        })
-
-    if not _is_quarter_hour(order.date):
-        errors.append({
-            "code": LimitCode.TIME,
-            "detail": "Uhrzeit muss auf eine Viertelstunde liegen (z. B. 12:15)"
-        })
-
-    config = db.query(ConfigChickenDB).first()
-    if not config:
-        raise HTTPException(status_code=500, detail="Keine Mengen-Konfiguration gefunden")
-
-    slot_start = order.date.replace(minute=(order.date.minute // 15) * 15, second=0, microsecond=0)
-    slot_end = slot_start + timedelta(minutes=15)
-
-    orders_in_slot = db.query(OrderChickenDB).filter(
-        OrderChickenDB.date >= slot_start,
-        OrderChickenDB.date < slot_end
-    ).all()   
-    
-    if order.chicken > 0:
-        used_chicken = sum(o.chicken for o in orders_in_slot)
-        if used_chicken + order.chicken > config.chicken:
-            errors.append({
-                "code": LimitCode.CHICKEN,
-                "detail": "Maximale Hähnchenmenge für dieses Zeitfenster überschritten."
-            })
-
-    if order.nuggets > 0:
-        used_nuggets = sum(o.nuggets for o in orders_in_slot)
-        if used_nuggets + order.nuggets > config.nuggets:
-            errors.append({
-                "code": LimitCode.NUGGETS,
-                "detail": "Maximale Nuggetsmenge für dieses Zeitfenster überschritten."
-            })
-
-    if order.fries > 0:
-        used_fries = sum(o.fries for o in orders_in_slot)
-        if used_fries + order.fries > config.fries:
-            errors.append({
-                "code": LimitCode.FRIES,
-                "detail": "Maximale Pommesmenge für dieses Zeitfenster überschritten."
-            })
-
-    if errors:
-        raise HTTPException(status_code=400, detail={"success": False, "errors": errors})
-
-@app.post("/order", tags=["Order"])
-async def create_order(order: OrderChicken):
-    """
-    Creates a new order and calculates its total price.
-
-    Args:
-        order (OrderChicken): The order data submitted by the client.
-
-    Returns:
-        dict: A success flag and the created order with calculated price.
-    """
-    db = SessionLocal()
-    try:
-        _check_slot_limit(order, db)
-
-        products = db.query(ProductDB).all()
-        price_map = {p.product.lower(): float(p.price) for p in products}
-
-        total_price = (
-            order.chicken * price_map.get("chicken", 0) +
-            order.nuggets * price_map.get("nuggets", 0) +
-            order.fries * price_map.get("fries", 0)
-        )
-
-        db_order = OrderChickenDB(**{k: v for k, v in order.dict().items() if k != "id"})
-        db_order.price = total_price
-
-        db.add(db_order)
-        db.commit()
-        db.refresh(db_order)
-
-        clean_order = jsonable_encoder(db_order)
-        await broadcast_order_event(f"ORDER_{order.status}", clean_order)
-
-        return {
-            "success": True,
-            "order": clean_order
-        }
-
-    except HTTPException as http_exc:
-        db.rollback()
-        raise http_exc
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.get("/orders", tags=["Order"])
-def get_orders(status: str = Query(None)):
-    """
-    Retrieves all orders, optionally filtered by status.
-
-    Args:
-        status (str, optional): Filter orders by their status.
-
-    Returns:
-        list: A list of order dictionaries.
-    """
-    db = SessionLocal()
-    try:
-        query = db.query(OrderChickenDB)
-        if status:
-            query = query.filter(OrderChickenDB.status == status)
-        orders = query.all()
-        return [order.__dict__ for order in orders]
-    except Exception as e:
-        print("Error in /orders:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.get("/order/{id}", tags=["Order"])
-def get_order(id: str):
-    """
-    Deletes an order by its ID.
-
-    Args:
-        id (str): The ID of the order to delete.
-
-    Returns:
-        dict: A success flag if deletion was successful.
-    """
-    db = SessionLocal()
-    try:
-        order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-
-        return order
-    except Exception as e:
-        print("Error in /orders:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.post("/validate-order", tags=["Order"])
-def validate_order(order: OrderChicken):
-    db = SessionLocal()
-    try:        
-        _check_slot_limit(order, db)
-
-        return {"valid": True, "message": "Bestellung ist gültig"}
-
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Interner Serverfehler: " + str(e))
-    finally:
-        db.close()
-
-@app.get("/orders/summary", tags=["Order"])
-def get_order_summary(date: str = Query(...), interval: str = Query(...)):
-    """
-    Liefert die Summen für Hähnchen, Nuggets und Pommes für ein bestimmtes Datum und Zeitfenster.
-    Beispiel:
-    - date="2025-10-11"
-    - interval="17:00-20:00"
-    """
-    try:
-        db = SessionLocal()
-
-        # Zeitfenster parsen
-        try:
-            start_str, end_str = interval.split("-")
-            start_time = datetime.strptime(f"{date} {start_str}", "%Y-%m-%d %H:%M")
-            end_time = datetime.strptime(f"{date} {end_str}", "%Y-%m-%d %H:%M")
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Ungültiges Zeitfenster")
-
-        # Intervall alle 15 Minuten
-        time_slots = []
-        current = start_time
-        while current <= end_time:
-            time_slots.append(current)
-            current += timedelta(minutes=15)
-
-        # Datenbankabfrage
-        orders = db.query(OrderChickenDB).filter(
-            cast(OrderChickenDB.date, DateTime) >= start_time,
-            cast(OrderChickenDB.date, DateTime) <= end_time
-        ).all()
-
-        # Aggregation
-        result = []
-        total_chicken = 0
-        total_nuggets = 0
-        total_fries = 0
-
-        for slot in time_slots:
-            slot_end = slot + timedelta(minutes=15)
-            chicken_count = sum(order.chicken for order in orders if slot <= order.date < slot_end)
-            nuggets_count = sum(order.nuggets for order in orders if slot <= order.date < slot_end)
-            fries_count = sum(order.fries for order in orders if slot <= order.date < slot_end)
-
-            total_chicken += chicken_count
-            total_nuggets += nuggets_count
-            total_fries += fries_count
-
-            result.append({
-                "time": slot.strftime("%H:%M"),
-                "chicken": chicken_count,
-                "nuggets": nuggets_count,
-                "fries": fries_count
-            })
-
-        return {
-            "date": date,
-            "interval": interval,
-            "slots": result,
-            "total": {
-                "chicken": total_chicken,
-                "nuggets": total_nuggets,
-                "fries": total_fries
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.put("/order/{id}", tags=["Order"])
-async def update_order(id: int, updated_order: OrderChicken):
-    """
-    Updates an existing order and recalculates its price.
-
-    Args:
-        id (int): The ID of the order to update.
-        updated_order (OrderChicken): The updated order data.
-
-    Returns:
-        dict: A success flag and the updated order.
-    """
-    db = SessionLocal()
-    try:
-        order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        
-        if updated_order.checked_in_at == "":
-            order.checked_in_at = None
-
-        
-
-        products = db.query(ProductDB).all()
-        price_map = {p.product.lower(): float(p.price) for p in products}
-
-        total_price = 0.0
-        total_price += updated_order.chicken * price_map.get("chicken", 0)
-        total_price += updated_order.nuggets * price_map.get("nuggets", 0)
-        total_price += updated_order.fries * price_map.get("fries", 0)
-
-        previous_status = order.status
-
-        for key, value in updated_order.dict(exclude_unset=True).items():
-            setattr(order, key, value)
-
-        _check_slot_limit(order, db)
-
-        order.price = total_price
-
-        if updated_order.status == "CHECKED_IN" and previous_status != "CHECKED_IN":
-            order.checked_in_at = datetime.utcnow()
-
-        db.commit()
-        db.refresh(order)
-
-        clean_order = jsonable_encoder(order)
-
-        await broadcast_order_event(f"ORDER_{updated_order.status}", clean_order)
-
-        return {"success": True, "order": clean_order}
-    except Exception as e:
-        db.rollback()
-        print("Update error:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-# Bestellung löschen
-@app.delete("/order/{id}", tags=["Order"])
-def delete_order(id: str):
-    """
-    Deletes an order by its ID.
-
-    Args:
-        id (str): The ID of the order to delete.
-
-    Returns:
-        dict: A success flag if deletion was successful.
-    """
-    db = SessionLocal()
-    try:
-        order = db.query(OrderChickenDB).filter(OrderChickenDB.id == id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-
-        db.delete(order)
-        db.commit()
-        return {"success": True}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.post("/order/price", tags=["Order"])
-def calculate_order_price(order: OrderChicken):
-    """
-    Calculates the total price of an order without saving it.
-
-    Args:
-        order (OrderChicken): The order data to price.
-
-    Returns:
-        dict: The calculated price.
-    """
-    db = SessionLocal()
-    try:
-        products = db.query(ProductDB).all()
-        if order.checked_in_at == "":
-            order.checked_in_at = None
-
-        price_map = {p.product.lower(): float(p.price) for p in products}
-
-        total_price = 0.0
-        total_price += order.chicken * price_map.get("chicken", 0)
-        total_price += order.nuggets * price_map.get("nuggets", 0)
-        total_price += order.fries * price_map.get("fries", 0)
-
-        return {"price": round(total_price, 2)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+app.include_router(order_router)
 
 @app.get("/products", tags=["Products"])
-def get_products():
+def get_products(db: Session = Depends(get_db)):
     """
     Retrieves all available products.
 
     Returns:
         list: A list of product dictionaries.
     """
-    db = SessionLocal()
     try:
         products = db.query(ProductDB).order_by(ProductDB.id.asc()).all()
         return [product.__dict__ for product in products]
@@ -561,7 +153,7 @@ def get_products():
         db.close()
 
 @app.get("/product/{id}", tags=["Products"])
-def get_product(id: int):
+def get_product(id: int, db: Session = Depends(get_db)):
     """
     Retrieves a single product by its ID.
 
@@ -571,7 +163,6 @@ def get_product(id: int):
     Returns:
         dict: The product data.
     """
-    db = SessionLocal()
     try:
         product = db.query(ProductDB).filter(ProductDB.id == id).first()
         if not product:
@@ -583,7 +174,7 @@ def get_product(id: int):
         db.close()
 
 @app.post("/product", tags=["Products"])
-def create_product(product: Product):
+def create_product(product: Product, db: Session = Depends(get_db)):
     """
     Creates a new product entry.
 
@@ -593,7 +184,6 @@ def create_product(product: Product):
     Returns:
         dict: The created product data.
     """
-    db = SessionLocal()
     db_product = ProductDB(**{k: v for k, v in product.dict().items() if k != "id"})
     try:
         db.add(db_product)
@@ -607,7 +197,7 @@ def create_product(product: Product):
         db.close()
 
 @app.put("/product/{id}", tags=["Products"])
-def update_product(id: int, updated_product: Product):
+def update_product(id: int, updated_product: Product, db: Session = Depends(get_db)):
     """
     Updates an existing product.
 
@@ -618,7 +208,6 @@ def update_product(id: int, updated_product: Product):
     Returns:
         dict: A success flag and the updated product data.
     """
-    db = SessionLocal()
     try:
         product = db.query(ProductDB).filter(ProductDB.id == id).first()
         if not product:
@@ -649,7 +238,7 @@ def update_product(id: int, updated_product: Product):
         db.close()
 
 @app.delete("/product/{id}", tags=["Products"])
-def delete_product(id: int):
+def delete_product(id: int, db: Session = Depends(get_db)):
     """
     Deletes a product by its ID.
 
@@ -659,7 +248,7 @@ def delete_product(id: int):
     Returns:
         dict: A success flag if deletion was successful.
     """
-    db = SessionLocal()
+    
     try:
         product = db.query(ProductDB).filter(ProductDB.id == id).first()
         if not product:
@@ -675,8 +264,8 @@ def delete_product(id: int):
         db.close()
 
 @app.get("/config/{id}", tags=["Config"])
-def get_config(id: int):
-    db = SessionLocal()
+def get_config(id: int, db: Session = Depends(get_db)):
+    
     try:
         product = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
         if not product:
@@ -688,8 +277,8 @@ def get_config(id: int):
         db.close()
 
 @app.put("/config/{id}", tags=["Config"])
-def update_config(id: int, config: ConfigChicken = None):
-    db = SessionLocal()
+def update_config(id: int, config: ConfigChicken = None, db: Session = Depends(get_db)):
+    
     try:
         db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
         if not db_config:
@@ -708,8 +297,8 @@ def update_config(id: int, config: ConfigChicken = None):
         db.close()
 
 @app.delete("/config/{id}", tags=["Config"])
-def delete_config(id: int):
-    db = SessionLocal()
+def delete_config(id: int, db: Session = Depends(get_db)):
+    
     try:
         db_config = db.query(ConfigChickenDB).filter(ConfigChickenDB.id == id).first()
         if not db_config:
@@ -725,8 +314,8 @@ def delete_config(id: int):
         db.close()
 
 @app.get("/slots", tags=["Slot"])
-def get_all_slots():
-    db = SessionLocal()
+def get_all_slots(db: Session = Depends(get_db)):
+    
     try:
         slots = db.query(SlotDB).order_by(asc(SlotDB.range_start)).all()
         return [slot.__dict__ for slot in slots]
@@ -736,8 +325,8 @@ def get_all_slots():
         db.close()
 
 @app.get("/slots/{id}", tags=["Slot"])
-def get_slot(id: int):
-    db = SessionLocal()
+def get_slot(id: int, db: Session = Depends(get_db)):
+    
     try:
         slot = db.query(SlotDB).filter(SlotDB.id == id).first()
         if not slot:
@@ -749,8 +338,8 @@ def get_slot(id: int):
         db.close()
 
 @app.post("/slots", tags=["Slot"])
-def create_slot(slot: Slot):
-    db = SessionLocal()
+def create_slot(slot: Slot, db: Session = Depends(get_db)):
+    
     try:
         new_slot = SlotDB(**slot.dict())
         db.add(new_slot)
@@ -764,8 +353,8 @@ def create_slot(slot: Slot):
         db.close()
 
 @app.put("/slots/{id}", tags=["Slot"])
-def update_slot(id: int, slot: Slot):
-    db = SessionLocal()
+def update_slot(id: int, slot: Slot, db: Session = Depends(get_db)):
+    
     try:
         db_slot = db.query(SlotDB).filter(SlotDB.id == id).first()
         if not db_slot:
@@ -784,8 +373,8 @@ def update_slot(id: int, slot: Slot):
         db.close()
 
 @app.delete("/slots/{id}", tags=["Slot"])
-def delete_slot(id: int):
-    db = SessionLocal()
+def delete_slot(id: int, db: Session = Depends(get_db)):
+    
     try:
         db_slot = db.query(SlotDB).filter(SlotDB.id == id).first()
         if not db_slot:
@@ -800,17 +389,15 @@ def delete_slot(id: int):
     finally:
         db.close()
 
-
-# Table endpoints
 @app.get("/tables-with-reservations", tags=["Table"])
-def get_tables_with_reservations():
+def get_tables_with_reservations(db: Session = Depends(get_db)):
     """
     Retrieves all tables with their reservations.
 
     Returns:
         list: A list of tables, each containing an array of reservations.
     """
-    db = SessionLocal()
+    
     try:
         tables = db.query(TableDB).order_by(TableDB.id.asc()).all()
         result = []
@@ -840,8 +427,8 @@ def get_tables_with_reservations():
 
 
 @app.get("/tables", tags=["Table"])
-def get_tables():
-    db = SessionLocal()
+def get_tables(db: Session = Depends(get_db)):
+    
     try:
         tables = db.query(TableDB).order_by(TableDB.id.asc()).all()
         return [table.__dict__ for table in tables]
@@ -852,8 +439,8 @@ def get_tables():
 
 
 @app.get("/tables/{id}", tags=["Table"])
-def get_table(id: int):
-    db = SessionLocal()
+def get_table(id: int, db: Session = Depends(get_db)):
+    
     try:
         table = db.query(TableDB).filter(TableDB.id == id).first()
         if not table:
@@ -866,8 +453,8 @@ def get_table(id: int):
 
 
 @app.post("/tables", tags=["Table"])
-def create_table(table: Table):
-    db = SessionLocal()
+def create_table(table: Table, db: Session = Depends(get_db)):
+    
     try:
         db_table = TableDB(**{k: v for k, v in table.dict().items() if k != "id"})
         db.add(db_table)
@@ -882,8 +469,8 @@ def create_table(table: Table):
 
 
 @app.put("/tables/{id}", tags=["Table"])
-def update_table(id: int, updated_table: Table):
-    db = SessionLocal()
+def update_table(id: int, updated_table: Table, db: Session = Depends(get_db)):
+    
     try:
         db_table = db.query(TableDB).filter(TableDB.id == id).first()
         if not db_table:
@@ -903,8 +490,8 @@ def update_table(id: int, updated_table: Table):
 
 
 @app.delete("/tables/{id}", tags=["Table"])
-def delete_table(id: int):
-    db = SessionLocal()
+def delete_table(id: int, db: Session = Depends(get_db)):
+    
     try:
         db_table = db.query(TableDB).filter(TableDB.id == id).first()
         if not db_table:
@@ -922,8 +509,8 @@ def delete_table(id: int):
 
 # TableReservation endpoints
 @app.get("/table-reservations", tags=["TableReservation"])
-def get_table_reservations():
-    db = SessionLocal()
+def get_table_reservations(db: Session = Depends(get_db)):
+    
     try:
         reservations = db.query(TableReservationDB).order_by(TableReservationDB.start.asc()).all()
         result = []
@@ -948,8 +535,8 @@ def get_table_reservations():
 
 
 @app.get("/table-reservations/{id}", tags=["TableReservation"])
-def get_table_reservation(id: int):
-    db = SessionLocal()
+def get_table_reservation(id: int, db: Session = Depends(get_db)):
+    
     try:
         reservation = db.query(TableReservationDB).filter(TableReservationDB.id == id).first()
         if not reservation:
@@ -973,8 +560,8 @@ def get_table_reservation(id: int):
 
 
 @app.post("/table-reservations", tags=["TableReservation"])
-def create_table_reservation(reservation: TableReservation):
-    db = SessionLocal()
+def create_table_reservation(reservation: TableReservation, db: Session = Depends(get_db)):
+    
     try:
         table = db.query(TableDB).filter(TableDB.id == reservation.table_id).first()
         if not table:
@@ -1007,8 +594,8 @@ def create_table_reservation(reservation: TableReservation):
 
 
 @app.put("/table-reservations/{id}", tags=["TableReservation"])
-def update_table_reservation(id: int, updated_reservation: TableReservation):
-    db = SessionLocal()
+def update_table_reservation(id: int, updated_reservation: TableReservation, db: Session = Depends(get_db)):
+    
     try:
         res = db.query(TableReservationDB).filter(TableReservationDB.id == id).first()
         if not res:
@@ -1047,8 +634,8 @@ def update_table_reservation(id: int, updated_reservation: TableReservation):
 
 
 @app.delete("/table-reservations/{id}", tags=["TableReservation"])
-def delete_table_reservation(id: int):
-    db = SessionLocal()
+def delete_table_reservation(id: int, db: Session = Depends(get_db)):
+    
     try:
         res = db.query(TableReservationDB).filter(TableReservationDB.id == id).first()
         if not res:
@@ -1063,5 +650,3 @@ def delete_table_reservation(id: int):
     finally:
         db.close()
 
-def _is_quarter_hour(dt: datetime) -> bool:
-    return dt.minute in [0, 15, 30, 45]

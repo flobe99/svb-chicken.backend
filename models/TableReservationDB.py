@@ -1,6 +1,6 @@
 from sqlalchemy import Column, ForeignKey, Integer, String, DateTime
 from sqlalchemy.orm import relationship
-from models.OrderChickenDB import Base
+from models.Base import Base
 
 class TableReservationDB(Base):
     __tablename__ = "table_reservation"

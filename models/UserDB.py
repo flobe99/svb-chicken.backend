@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean
 
-from models.OrderChickenDB import Base
+from models.Base import Base
 
 class UserDB(Base):
     __tablename__ = "users"
